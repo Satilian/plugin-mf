@@ -1,0 +1,38 @@
+{
+  "name": "plugin-mf",
+  "version": "0.0.0",
+  "type": "module",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "sideEffects": false,
+  "publishConfig": {
+    "access": "public"
+  },
+  "peerDependencies": {
+    "@rsbuild/core": "^2.2.1",
+    "react": "^19.2.8",
+    "@types/react": "^19.2.18"
+  },
+  "scripts": {
+    "build": "rslib",
+    "dev": "rslib --watch",
+    "test": "rstest",
+    "test:watch": "rstest --watch"
+  },
+  "devDependencies": {
+    "@rsbuild/core": "^2.2.1",
+    "@rslib/core": "^0.23.2",
+    "@types/node": "^24.13.2",
+    "typescript": "^6.0.3"
+  }
+}

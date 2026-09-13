@@ -21,13 +21,10 @@ export class ManifestLoader {
   }
 
   async #load(url: string) {
-    console.log("FETCH  MANIFEST:", url);
     const response = await fetch(url);
 
     if (!response.ok) {
-      throw new Error(
-        `Failed to load manifest: ${response.status} ${response.statusText}`,
-      );
+      throw new Error(`Failed to load manifest: ${response.status} ${response.statusText}`);
     }
 
     const manifest = (await response.json()) as Record<string, string>;
@@ -47,8 +44,7 @@ export class ManifestLoader {
     }
 
     for (const [name, path] of Object.entries(manifest)) {
-      if (typeof path !== "string")
-        throw new Error(`Invalid remote path for "${name}"`);
+      if (typeof path !== "string") throw new Error(`Invalid remote path for "${name}"`);
     }
   }
 }

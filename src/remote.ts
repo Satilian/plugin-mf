@@ -1,26 +1,28 @@
-import { ManifestLoader } from "./manifest-loader";
-import { RemoteModuleLoader } from "./module-loader";
 import { lazy } from "react";
+import { ManifestLoader } from "./manifest-loader";
 
 export class Remote {
+  #manifestLoader = new ManifestLoader();
   manifest?: Record<string, string>;
   baseUrl = "";
 
   constructor(
     private url: string,
-    private manifestLoader = new ManifestLoader(),
-    private moduleLoader = new RemoteModuleLoader(),
+    private moduleLoader: { load: (url: string) => Promise<any> },
+    private scope: string,
   ) {}
 
-  async #load(url: string) {
-    const { manifest, __baseUrl } = await this.manifestLoader.load(url);
+  async #load() {
+    const { manifest, __baseUrl } = await this.#manifestLoader.load(
+      `${this.url}/${this.scope}/manifest.json`,
+    );
 
     this.manifest = manifest;
     this.baseUrl = __baseUrl;
   }
 
   async component(name: string) {
-    if (!this.manifest) await this.#load(this.url!);
+    if (!this.manifest) await this.#load();
 
     const path = this.manifest?.[name];
 

@@ -1,11 +1,11 @@
-import { mkdtemp, rm, writeFile, mkdir, access } from "node:fs/promises";
+import { Remote } from "./remote";
+import { access, mkdir, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
-import { createHash } from "node:crypto";
 
 const CACHE_DIR = path.join(process.cwd(), "node_modules/.cache/mf");
 
-export class RemoteModuleLoader {
+export class Loader {
   #cache = new Map();
   #cacheDir: string;
   #import = new Function("fileUrl", "return import(fileUrl)");
@@ -63,4 +63,30 @@ export class RemoteModuleLoader {
       console.error("Failed to clear cache directory:", error);
     }
   }
+}
+
+const remotes = new Map<string, Remote>();
+
+declare const __MF_REMOTES__: Record<string, string> | undefined;
+
+function ensureInit() {
+  if (remotes.size > 0) return;
+
+  const loader = new Loader();
+  for (const [name, url] of Object.entries(__MF_REMOTES__ || {})) {
+    remotes.set(name, new Remote(url, loader, "server"));
+  }
+}
+
+export function getRemote(name: string): Remote {
+  ensureInit();
+
+  const remote = remotes.get(name);
+  if (!remote) {
+    throw new Error(
+      `[plugin-mf] Remote "${name}" not found. Available: ${[...remotes.keys()].join(", ") || "none"}`,
+    );
+  }
+
+  return remote;
 }

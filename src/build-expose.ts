@@ -1,66 +1,94 @@
 import { rspack, Rspack } from "@rsbuild/core";
 import { writeFile } from "node:fs/promises";
 import path from "node:path";
+import { formatStats } from "./format-stats";
 
 export type BuildExposeProps = {
   entry: Record<string, string>;
   externals?: string[];
-  nodeConfig: Rspack.Configuration;
+  config: Rspack.Configuration;
 };
 
-export async function buildExpose({
-  entry,
-  externals,
-  nodeConfig,
-}: BuildExposeProps) {
-  const config = {
-    ...nodeConfig,
-    name: `mf`,
+export async function buildExpose({ entry, externals, config: baseConfig }: BuildExposeProps) {
+  const outputPath = path.resolve(baseConfig?.output?.path || "", "mf");
+
+  const config: Rspack.RspackOptions = {
+    ...baseConfig,
+    name: `mf-${String(baseConfig.name || "bundle")}`,
     entry,
     externals,
     output: {
-      ...nodeConfig.output,
-      path: path.resolve(nodeConfig?.output?.path || "", "mf"),
+      ...baseConfig.output,
+      path: outputPath,
       filename: "[name].[contenthash:10].js",
       library: { type: "module" },
       module: true,
     },
-    experiments: { ...nodeConfig.experiments, outputModule: true },
-    optimization: { ...nodeConfig.optimization, runtimeChunk: false },
+    optimization: { ...baseConfig.optimization, runtimeChunk: false },
   };
+
+  config.output ??= {};
+  config.optimization ??= {};
+  config.externals ??= [];
+
+  if (baseConfig.name === "web") {
+    config.output.chunkFormat = "module";
+    config.output.chunkLoading = "import";
+
+    config.optimization.splitChunks = false;
+
+    config.externals = [
+      ({ request }, callback) => {
+        if (request && externals?.includes(request)) {
+          callback(undefined, `promise globalThis.__MF_GET_SHARED__(${JSON.stringify(request)})`);
+          return;
+        }
+
+        // остальные externals из конфига плагина, если нужны
+        // if (request && baseConfig.externals?.includes(request)) {
+        //   callback(null, `module ${request}`);
+        //   return;
+        // }
+
+        callback();
+      },
+    ];
+  }
 
   const compiler = rspack(config);
 
   try {
-    const manifest = await new Promise<Record<string, string>>(
-      (resolve, reject) => {
-        compiler.run((error, stats) => {
-          if (error) return reject(error);
+    const { manifest, stats } = await new Promise<{
+      manifest: Record<string, string>;
+      stats?: Rspack.Stats;
+    }>((resolve, reject) => {
+      compiler.run((error, stats) => {
+        if (error) return reject(error);
 
-          if (stats?.hasErrors()) {
-            console.error(stats.toString({ colors: true }));
+        if (stats?.hasErrors()) {
+          console.error(stats.toString({ colors: true }));
 
-            return reject(new Error("MF build failed"));
-          }
+          return reject(new Error("MF build failed"));
+        }
 
-          const manifest = (
-            stats?.toJson({ assets: true }).assets ?? []
-          ).reduce((acc, { name, chunkNames }) => {
-            return chunkNames?.[0] ? { ...acc, [chunkNames[0]]: name } : acc;
-          }, {});
+        const manifest = (stats?.toJson({ assets: true }).assets ?? []).reduce((acc, { name, chunkNames }) => {
+          return chunkNames?.[0] ? { ...acc, [chunkNames[0]]: name } : acc;
+        }, {});
 
-          resolve(manifest);
-        });
-      },
-    );
+        resolve({ manifest, stats });
+      });
+    });
 
-    const outputPath = path.resolve(nodeConfig.output?.path || "", "mf");
+    if (stats)
+      console.log(
+        await formatStats({
+          stats,
+          outputPath: outputPath,
+          environment: config.name || "",
+        }),
+      );
 
-    await writeFile(
-      path.join(outputPath, "manifest.json"),
-      JSON.stringify(manifest, null, 2),
-      "utf8",
-    );
+    await writeFile(path.join(outputPath, "manifest.json"), JSON.stringify(manifest, null, 2), "utf8");
   } finally {
     await new Promise<void>((resolve, reject) => {
       compiler.close((error) => (error ? reject(error) : resolve()));

@@ -1,6 +1,6 @@
 import type { RsbuildPlugin, Rspack } from "@rsbuild/core";
 import { buildExpose } from "./build-expose";
-import { moduleResolver } from "./module-resolver";
+import { resolver } from "./resolver";
 
 export type PluginMFConfig = {
   remotes?: Record<string, string>;
@@ -12,21 +12,45 @@ export const pluginMF = (mfConfig: PluginMFConfig = {}): RsbuildPlugin => ({
   name: "plugin-mf",
   setup(api) {
     let nodeConfig: Rspack.Configuration | undefined;
+    let webConfig: Rspack.Configuration | undefined;
 
     api.onBeforeCreateCompiler(({ bundlerConfigs }) => {
-      nodeConfig = bundlerConfigs.find((config) => config.target === "node");
+      bundlerConfigs.forEach((config) => {
+        if (!nodeConfig && config.name === "node") {
+          nodeConfig = config;
+          return;
+        }
+
+        if (!webConfig && config.name === "web") webConfig = config;
+      });
     });
 
     api.onAfterBuild(async () => {
-      if (!nodeConfig) throw new Error("Node config not found");
-
       if (!mfConfig.expose || Object.keys(mfConfig.expose).length === 0) return;
 
-      await buildExpose({
-        entry: mfConfig.expose,
-        externals: mfConfig.externals,
-        nodeConfig,
-      });
+      const tasks: Promise<void>[] = [];
+
+      if (nodeConfig) {
+        tasks.push(
+          buildExpose({
+            entry: mfConfig.expose,
+            externals: mfConfig.externals,
+            config: nodeConfig,
+          }),
+        );
+      }
+
+      if (webConfig) {
+        tasks.push(
+          buildExpose({
+            entry: mfConfig.expose,
+            externals: mfConfig.externals,
+            config: webConfig,
+          }),
+        );
+      }
+
+      await Promise.all(tasks);
     });
 
     const remoteNames = Object.keys(mfConfig.remotes || {});
@@ -41,11 +65,9 @@ export const pluginMF = (mfConfig: PluginMFConfig = {}): RsbuildPlugin => ({
         );
       });
 
-      api.resolve(({ resolveData }) => {
-        resolveData.request = moduleResolver(resolveData.request, remoteNames);
+      api.resolve(({ resolveData, environment }) => {
+        resolveData.request = resolver(resolveData.request, remoteNames, environment.name);
       });
     }
   },
 });
-
-export { getRemote } from "./runtime";

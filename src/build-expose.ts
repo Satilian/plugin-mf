@@ -3,6 +3,8 @@ import { writeFile } from "node:fs/promises";
 import path from "node:path";
 import { formatStats } from "./format-stats";
 
+type Externals = Rspack.RspackOptions["externals"];
+
 export type BuildExposeProps = {
   entry: Record<string, string>;
   externals?: string[];
@@ -16,7 +18,6 @@ export async function buildExpose({ entry, externals, config: baseConfig }: Buil
     ...baseConfig,
     name: `mf-${String(baseConfig.name || "bundle")}`,
     entry,
-    externals,
     output: {
       ...baseConfig.output,
       path: outputPath,
@@ -29,7 +30,11 @@ export async function buildExpose({ entry, externals, config: baseConfig }: Buil
 
   config.output ??= {};
   config.optimization ??= {};
-  config.externals ??= [];
+
+  const mergedExternals = [];
+  if (baseConfig.externals) mergedExternals.push(baseConfig.externals);
+  if (externals && baseConfig.name !== "web") mergedExternals.push(externals);
+  config.externals = mergedExternals.flat();
 
   if (baseConfig.name === "web") {
     config.output.chunkFormat = "module";
@@ -37,22 +42,14 @@ export async function buildExpose({ entry, externals, config: baseConfig }: Buil
 
     config.optimization.splitChunks = false;
 
-    config.externals = [
-      ({ request }, callback) => {
-        if (request && externals?.includes(request)) {
-          callback(undefined, `promise globalThis.__MF_GET_SHARED__(${JSON.stringify(request)})`);
-          return;
-        }
+    config.externals.push(({ request }, callback) => {
+      if (request && externals?.includes(request)) {
+        callback(undefined, `var globalThis.__MF_GET_SHARED__(${JSON.stringify(request)})`);
+        return;
+      }
 
-        // остальные externals из конфига плагина, если нужны
-        // if (request && baseConfig.externals?.includes(request)) {
-        //   callback(null, `module ${request}`);
-        //   return;
-        // }
-
-        callback();
-      },
-    ];
+      callback();
+    });
   }
 
   const compiler = rspack(config);

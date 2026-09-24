@@ -1,11 +1,13 @@
 import type { RsbuildPlugin, Rspack } from "@rsbuild/core";
 import { buildExpose } from "./build-expose";
 import { resolver } from "./resolver";
+import { modifyEntry } from "./bootstrap";
 
 export type PluginMFConfig = {
   remotes?: Record<string, string>;
   expose?: Record<string, string>;
   externals?: string[];
+  shared?: string[];
 };
 
 export const pluginMF = (mfConfig: PluginMFConfig = {}): RsbuildPlugin => ({
@@ -63,6 +65,8 @@ export const pluginMF = (mfConfig: PluginMFConfig = {}): RsbuildPlugin => ({
             __MF_REMOTES__: JSON.stringify(mfConfig.remotes),
           }),
         );
+
+        modifyEntry<typeof config>(config, mfConfig);
       });
 
       api.resolve(({ resolveData, environment }) => {

@@ -1,9 +1,8 @@
 import { rspack, Rspack } from "@rsbuild/core";
 import { writeFile } from "node:fs/promises";
 import path from "node:path";
+import { buildTypes } from "./build-types";
 import { formatStats } from "./format-stats";
-
-type Externals = Rspack.RspackOptions["externals"];
 
 export type BuildExposeProps = {
   entry: Record<string, string>;
@@ -86,6 +85,7 @@ export async function buildExpose({ entry, externals, config: baseConfig }: Buil
       );
 
     await writeFile(path.join(outputPath, "manifest.json"), JSON.stringify(manifest, null, 2), "utf8");
+    await buildTypes({ entry, outputPath });
   } finally {
     await new Promise<void>((resolve, reject) => {
       compiler.close((error) => (error ? reject(error) : resolve()));

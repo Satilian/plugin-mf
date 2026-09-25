@@ -2,6 +2,7 @@ import type { RsbuildPlugin, Rspack } from "@rsbuild/core";
 import { buildExpose } from "./build-expose";
 import { resolver } from "./resolver";
 import { modifyEntry } from "./bootstrap";
+import { syncRemoteTypes } from "./sync-remote-types";
 
 export type PluginMFConfig = {
   remotes?: Record<string, string>;
@@ -58,6 +59,10 @@ export const pluginMF = (mfConfig: PluginMFConfig = {}): RsbuildPlugin => ({
     const remoteNames = Object.keys(mfConfig.remotes || {});
 
     if (remoteNames.length) {
+      api.onBeforeBuild(async () => {
+        await syncRemoteTypes({ remotes: mfConfig.remotes! });
+      });
+
       api.modifyRspackConfig((config) => {
         config.plugins = config.plugins || [];
         config.plugins.push(

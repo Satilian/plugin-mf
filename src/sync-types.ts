@@ -12,10 +12,10 @@ type TypeModule = {
   export: string;
 };
 
-const TYPES_ROOT = path.join(process.cwd(), "src", "mf-types");
+const TYPES_ROOT = path.join(process.cwd(), "node_modules", ".cache", "mf-types");
 const MODULES_FILE = path.join(process.cwd(), "src", "mf-types.d.ts");
 
-export async function syncRemoteTypes({ remotes }: SyncRemoteTypesProps) {
+export async function syncTypes({ remotes }: SyncRemoteTypesProps) {
   await rm(TYPES_ROOT, { recursive: true, force: true });
   await mkdir(TYPES_ROOT, { recursive: true });
 
@@ -36,7 +36,7 @@ export async function syncRemoteTypes({ remotes }: SyncRemoteTypesProps) {
 }
 
 async function downloadRemoteTypes(name: string, url: string): Promise<TypeModule[]> {
-  const manifestUrl = new URL("client/types-manifest.json", `${url.replace(/\/$/, "")}/`).href;
+  const manifestUrl = new URL("types/manifest.json", `${url.replace(/\/$/, "")}/`).href;
   const response = await fetch(manifestUrl);
   if (!response.ok) {
     throw new Error(`${response.status} ${response.statusText}`);
@@ -48,7 +48,7 @@ async function downloadRemoteTypes(name: string, url: string): Promise<TypeModul
 
   await Promise.all(
     manifest.files.map(async (filePath) => {
-      const fileResponse = await fetch(new URL(`types/${filePath}`, baseUrl));
+      const fileResponse = await fetch(new URL(filePath, baseUrl));
       if (!fileResponse.ok) {
         throw new Error(`Unable to load declaration "${filePath}": ${fileResponse.status} ${fileResponse.statusText}`);
       }
@@ -61,7 +61,7 @@ async function downloadRemoteTypes(name: string, url: string): Promise<TypeModul
 
   return Object.entries(manifest.exposes).map(([expose, info]) => ({
     name: `${name}/${expose}`,
-    path: `./mf-types/${name}/${info.path.replace(/\.d\.ts$/, "")}`,
+    path: `../node_modules/.cache/mf-types/${name}/${info.path.replace(/\.d\.ts$/, "")}`,
     export: info.export,
   }));
 }

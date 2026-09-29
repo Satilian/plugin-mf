@@ -1,8 +1,9 @@
 import type { RsbuildPlugin, Rspack } from "@rsbuild/core";
-import { buildExpose } from "./build-expose";
+import { buildExpose, getMFOutputPath } from "./build-expose";
+import { buildTypes } from "./build-types";
 import { resolver } from "./resolver";
 import { modifyEntry } from "./bootstrap";
-import { syncRemoteTypes } from "./sync-remote-types";
+import { syncTypes } from "./sync-types";
 
 export type PluginMFConfig = {
   remotes?: Record<string, string>;
@@ -26,6 +27,17 @@ export const pluginMF = (mfConfig: PluginMFConfig = {}): RsbuildPlugin => ({
 
         if (!webConfig && config.name === "web") webConfig = config;
       });
+
+      if (!nodeConfig && webConfig)
+        nodeConfig = {
+          ...webConfig,
+          name: "node",
+          target: "node",
+          externalsPresets: {
+            ...webConfig.externalsPresets,
+            node: true,
+          },
+        };
     });
 
     api.onAfterBuild(async () => {
@@ -54,13 +66,21 @@ export const pluginMF = (mfConfig: PluginMFConfig = {}): RsbuildPlugin => ({
       }
 
       await Promise.all(tasks);
+
+      const outputConfig = webConfig ?? nodeConfig;
+      if (outputConfig) {
+        await buildTypes({
+          entry: mfConfig.expose,
+          outputPath: getMFOutputPath(outputConfig),
+        });
+      }
     });
 
     const remoteNames = Object.keys(mfConfig.remotes || {});
 
     if (remoteNames.length) {
       api.onBeforeBuild(async () => {
-        await syncRemoteTypes({ remotes: mfConfig.remotes! });
+        await syncTypes({ remotes: mfConfig.remotes! });
       });
 
       api.modifyRspackConfig((config) => {

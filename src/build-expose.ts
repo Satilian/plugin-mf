@@ -1,7 +1,6 @@
 import { rspack, Rspack } from "@rsbuild/core";
 import { writeFile } from "node:fs/promises";
 import path from "node:path";
-import { buildTypes } from "./build-types";
 import { formatStats } from "./format-stats";
 
 export type BuildExposeProps = {
@@ -10,8 +9,16 @@ export type BuildExposeProps = {
   config: Rspack.Configuration;
 };
 
+export function getMFOutputPath(config: Rspack.Configuration) {
+  const outputPath = config.output?.path;
+  if (!outputPath) throw new Error("[plugin-mf] Unable to determine MF output path");
+
+  return path.resolve(outputPath, "mf");
+}
+
 export async function buildExpose({ entry, externals, config: baseConfig }: BuildExposeProps) {
-  const outputPath = path.resolve(baseConfig?.output?.path || "", "mf");
+  const scope = baseConfig.name === "node" ? "server" : "client";
+  const outputPath = path.join(getMFOutputPath(baseConfig), scope);
 
   const config: Rspack.RspackOptions = {
     ...baseConfig,
@@ -85,7 +92,6 @@ export async function buildExpose({ entry, externals, config: baseConfig }: Buil
       );
 
     await writeFile(path.join(outputPath, "manifest.json"), JSON.stringify(manifest, null, 2), "utf8");
-    await buildTypes({ entry, outputPath });
   } finally {
     await new Promise<void>((resolve, reject) => {
       compiler.close((error) => (error ? reject(error) : resolve()));

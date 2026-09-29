@@ -45,7 +45,7 @@ export async function buildTypes({ entry, outputPath }: BuildTypesProps) {
   const errors = diagnostics.filter((diagnostic) => diagnostic.category === ts.DiagnosticCategory.Error);
   if (errors.length) throw new Error(formatDiagnostics(errors));
 
-  const commonSourceDirectory = compilerOptions.rootDir || findCommonDirectory(parsed.fileNames);
+  const commonSourceDirectory = compilerOptions.rootDir || findCommonDirectory(fileNames);
   const checker = program.getTypeChecker();
   const exposes: RemoteTypeManifest["exposes"] = {};
 
@@ -75,7 +75,7 @@ export async function buildTypes({ entry, outputPath }: BuildTypesProps) {
   if (!files?.length) throw new Error("[plugin-mf] TypeScript did not emit declarations for exposed modules");
 
   const manifest: RemoteTypeManifest = { version: 1, files, exposes };
-  await writeFile(path.join(outputPath, "types-manifest.json"), JSON.stringify(manifest, null, 2), "utf8");
+  await writeFile(path.join(typesPath, "manifest.json"), JSON.stringify(manifest, null, 2), "utf8");
 }
 
 function formatDiagnostics(diagnostics: readonly ts.Diagnostic[]) {

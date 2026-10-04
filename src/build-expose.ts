@@ -2,6 +2,7 @@ import { rspack, Rspack } from "@rsbuild/core";
 import { writeFile } from "node:fs/promises";
 import path from "node:path";
 import { formatStats } from "./format-stats";
+import type { RemoteManifest } from "./manifest-loader";
 
 export type BuildExposeProps = {
   entry: Record<string, string>;
@@ -28,9 +29,20 @@ export async function buildExpose({ entry, externals, config: baseConfig }: Buil
       ...baseConfig.output,
       path: outputPath,
       filename: "[name].[contenthash:10].js",
+      cssFilename: "[name].[contenthash:10].css",
+      cssChunkFilename: "[name].[contenthash:10].css",
       library: { type: "module" },
       module: true,
     },
+    plugins: baseConfig.plugins?.map((plugin) =>
+      plugin instanceof rspack.CssExtractRspackPlugin || plugin?.constructor.name === "CssExtractRspackPlugin"
+        ? new rspack.CssExtractRspackPlugin({
+            ...(plugin as InstanceType<typeof rspack.CssExtractRspackPlugin>).options,
+            filename: "[name].[contenthash:10].css",
+            chunkFilename: "[name].[contenthash:10].css",
+          })
+        : plugin,
+    ),
     optimization: { ...baseConfig.optimization, runtimeChunk: false },
   };
 
@@ -62,7 +74,7 @@ export async function buildExpose({ entry, externals, config: baseConfig }: Buil
 
   try {
     const { manifest, stats } = await new Promise<{
-      manifest: Record<string, string>;
+      manifest: RemoteManifest;
       stats?: Rspack.Stats;
     }>((resolve, reject) => {
       compiler.run((error, stats) => {
@@ -74,9 +86,14 @@ export async function buildExpose({ entry, externals, config: baseConfig }: Buil
           return reject(new Error("MF build failed"));
         }
 
-        const manifest = (stats?.toJson({ assets: true }).assets ?? []).reduce((acc, { name, chunkNames }) => {
-          return chunkNames?.[0] ? { ...acc, [chunkNames[0]]: name } : acc;
-        }, {});
+        const manifest: RemoteManifest = {};
+        for (const [name, entrypoint] of Object.entries(stats?.toJson({ entrypoints: true }).entrypoints ?? {})) {
+          const assets = entrypoint.assets?.map((asset) => asset.name) ?? [];
+          const js = assets.filter((asset) => /\.m?js$/.test(asset));
+          if (js.length !== 1)
+            return reject(new Error(`[plugin-mf] Expected one JS entry for "${name}", got ${js.length}`));
+          manifest[name] = { js: js[0], css: assets.filter((asset) => asset.endsWith(".css")) };
+        }
 
         resolve({ manifest, stats });
       });

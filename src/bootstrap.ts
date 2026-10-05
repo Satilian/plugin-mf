@@ -7,12 +7,12 @@ type Config = {
 };
 
 export function modifyEntry<T extends Config>(config: T, mfConfig: PluginMFConfig) {
-  if (config.name !== "web" || !mfConfig.shared?.length || !config.entry) return;
+  if (!mfConfig.shared?.length || !config.entry) return;
 
   const bootstrap = createSharedBootstrap(mfConfig.shared);
 
   if (typeof config.entry === "string" || Array.isArray(config.entry)) {
-    config.entry = [bootstrap, config.entry] as T["entry"];
+    config.entry = [bootstrap, ...[config.entry].flat()] as T["entry"];
     return;
   }
 

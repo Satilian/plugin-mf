@@ -51,8 +51,18 @@ export async function buildExpose({ entry, externals, config: baseConfig }: Buil
 
   const mergedExternals = [];
   if (baseConfig.externals) mergedExternals.push(baseConfig.externals);
-  if (externals && baseConfig.name !== "web") mergedExternals.push(externals);
   config.externals = mergedExternals.flat();
+
+  // Remotes must use the host's module instances, including during SSR.
+  // Place this before inherited externals so they cannot resolve a second copy.
+  config.externals.unshift(({ request }, callback) => {
+    if (request && externals?.includes(request)) {
+      callback(undefined, `var globalThis.__MF_GET_SHARED__(${JSON.stringify(request)})`);
+      return;
+    }
+
+    callback();
+  });
 
   if (baseConfig.name === "web") {
     config.output.chunkFormat = "module";
@@ -60,14 +70,6 @@ export async function buildExpose({ entry, externals, config: baseConfig }: Buil
 
     config.optimization.splitChunks = false;
 
-    config.externals.push(({ request }, callback) => {
-      if (request && externals?.includes(request)) {
-        callback(undefined, `var globalThis.__MF_GET_SHARED__(${JSON.stringify(request)})`);
-        return;
-      }
-
-      callback();
-    });
   }
 
   const compiler = rspack(config);

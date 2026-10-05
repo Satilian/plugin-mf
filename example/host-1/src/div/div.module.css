@@ -1,0 +1,8 @@
+.div {
+  padding: 16px;
+  border: 1px solid #79ff6d;
+  border-radius: 4px;
+  display: grid;
+  gap: 16px;
+  align-self: center;
+}

@@ -1,0 +1,35 @@
+{
+  "name": "sub-host-1",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "pnpm build && dotenvx run -- pnpm server",
+    "build": "rsbuild build",
+    "dev": "rsbuild dev",
+    "dev:server": "concurrently \"pnpm watch\" \"pnpm watch:server\"",
+    "watch": "rsbuild build --watch",
+    "watch:server": "wait-on dist/server.js && dotenvx run -- node --watch-path=dist dist/server",
+    "server": "node dist/server"
+  },
+  "dependencies": {
+    "@types/cors": "^2.8.19",
+    "cors": "^2.8.6",
+    "express": "^5.2.1",
+    "plugin-mf": "link:../..",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8"
+  },
+  "devDependencies": {
+    "@dotenvx/dotenvx": "^2.32.4",
+    "@rsbuild/core": "^2.2.1",
+    "@rsbuild/plugin-react": "^2.1.0",
+    "@types/express": "^5.0.6",
+    "@types/node": "^24.13.3",
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.4",
+    "concurrently": "^10.0.5",
+    "typescript": "^6.0.3",
+    "wait-on": "^9.5.1"
+  }
+}

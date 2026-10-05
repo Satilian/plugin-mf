@@ -38,8 +38,9 @@ export async function buildTypes({ entry, outputPath }: BuildTypesProps) {
   await rm(typesPath, { recursive: true, force: true });
   await mkdir(typesPath, { recursive: true });
   const fileNames = Object.values(entry).map((request) => path.resolve(configDirectory, request));
+  const declarationFiles = parsed.fileNames.filter((fileName) => fileName.endsWith(".d.ts"));
 
-  const program = ts.createProgram(fileNames, compilerOptions);
+  const program = ts.createProgram([...new Set([...fileNames, ...declarationFiles])], compilerOptions);
   const emitResult = program.emit();
   const diagnostics = ts.getPreEmitDiagnostics(program).concat(emitResult.diagnostics);
   const errors = diagnostics.filter((diagnostic) => diagnostic.category === ts.DiagnosticCategory.Error);

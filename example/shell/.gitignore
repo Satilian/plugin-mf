@@ -1,0 +1,21 @@
+# Local
+.DS_Store
+*.local
+*.log*
+.env
+
+# Dist
+node_modules
+dist/
+
+# Profile
+.rspack-profile-*/
+
+# Generated remote types
+src/mf-types.d.ts
+
+# IDE
+.vscode/*
+!.vscode/extensions.json
+.idea
+.mf-cache

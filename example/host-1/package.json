@@ -10,7 +10,7 @@
     "dev:server": "concurrently \"pnpm watch\" \"pnpm watch:server\"",
     "watch": "rsbuild build --watch",
     "watch:server": "wait-on dist/server.js && dotenvx run -- node --watch-path=dist dist/server",
-    "server": "node dist/server"
+    "server": "dotenvx run -- node dist/server"
   },
   "dependencies": {
     "@types/cors": "^2.8.19",
@@ -18,7 +18,7 @@
     "express": "^5.2.1",
     "plugin-mf": "link:../..",
     "react": "^19.2.8",
-    "react-dom": "^19.2.8"
+    "react-dom": "19.2.8"
   },
   "devDependencies": {
     "@dotenvx/dotenvx": "^2.32.4",

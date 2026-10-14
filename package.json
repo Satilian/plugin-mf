@@ -41,8 +41,9 @@
   "scripts": {
     "build": "rslib",
     "dev": "rslib --watch",
-    "test": "rstest",
-    "test:watch": "rstest --watch"
+    "test": "node --experimental-transform-types --test src/*.test.ts",
+    "test:watch": "rstest --watch",
+    "start": "pnpm run build && pnpm --filter ./example/* run build && pnpm --filter ./example/* --parallel --stream run server"
   },
   "devDependencies": {
     "@rsbuild/core": "^2.2.1",

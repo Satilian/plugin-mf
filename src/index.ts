@@ -4,6 +4,10 @@ import { buildTypes } from "./build-types";
 import { resolver } from "./resolver";
 import { modifyEntry } from "./bootstrap";
 import { syncTypes } from "./sync-types";
+import { randomUUID } from "node:crypto";
+import { writeFile } from "node:fs/promises";
+import path from "node:path";
+import { RELEASE_MANIFEST_VERSION, type ReleaseManifest } from "./release-manifest";
 
 export type PluginMFConfig = {
   remotes?: Record<string, string>;
@@ -43,6 +47,8 @@ export const pluginMF = (mfConfig: PluginMFConfig = {}): RsbuildPlugin => ({
     api.onAfterBuild(async () => {
       if (!mfConfig.expose || Object.keys(mfConfig.expose).length === 0) return;
 
+      // One identifier per build, shared by all artifacts of this provider.
+      const releaseId = randomUUID();
       const tasks: Promise<void>[] = [];
 
       if (nodeConfig) {
@@ -69,10 +75,18 @@ export const pluginMF = (mfConfig: PluginMFConfig = {}): RsbuildPlugin => ({
 
       const outputConfig = webConfig ?? nodeConfig;
       if (outputConfig) {
-        await buildTypes({
-          entry: mfConfig.expose,
-          outputPath: getMFOutputPath(outputConfig),
-        });
+        const outputPath = getMFOutputPath(outputConfig);
+        await buildTypes({ entry: mfConfig.expose, outputPath });
+
+        const manifest: ReleaseManifest = {
+          version: RELEASE_MANIFEST_VERSION,
+          releaseId,
+          ...(nodeConfig ? { server: "server/manifest.json" } : {}),
+          ...(webConfig ? { client: "client/manifest.json" } : {}),
+          types: "types/manifest.json",
+        };
+        // Write the index last so consumers do not discover a partially built release.
+        await writeFile(path.join(outputPath, "manifest.json"), JSON.stringify(manifest, null, 2), "utf8");
       }
     });
 

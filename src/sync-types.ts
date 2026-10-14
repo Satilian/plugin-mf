@@ -1,6 +1,7 @@
 import { mkdir, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import type { RemoteTypeManifest } from "./build-types";
+import { loadReleaseManifest } from "./release-manifest";
 
 type SyncRemoteTypesProps = {
   remotes: Record<string, string>;
@@ -36,7 +37,11 @@ export async function syncTypes({ remotes }: SyncRemoteTypesProps) {
 }
 
 async function downloadRemoteTypes(name: string, url: string): Promise<TypeModule[]> {
-  const manifestUrl = new URL("types/manifest.json", `${url.replace(/\/$/, "")}/`).href;
+  const remoteBaseUrl = `${url.replace(/\/$/, "")}/`;
+  const release = await loadReleaseManifest(new URL("manifest.json", remoteBaseUrl).href);
+  const manifestUrl = release
+    ? new URL(release.manifest.types, release.baseUrl).href
+    : new URL("types/manifest.json", remoteBaseUrl).href;
   const response = await fetch(manifestUrl);
   if (!response.ok) {
     throw new Error(`${response.status} ${response.statusText}`);

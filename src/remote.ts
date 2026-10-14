@@ -1,10 +1,14 @@
 import { createElement, Fragment, lazy } from "react";
-import { ManifestLoader, type RemoteManifest } from "./manifest-loader";
+import { ManifestLoader, type RemoteManifest, type RemoteInfo } from "./manifest-loader.ts";
+import { loadReleaseManifest, type ReleaseManifest } from "./release-manifest.ts";
 
 export class Remote {
   #manifestLoader = new ManifestLoader();
   manifest?: RemoteManifest;
   baseUrl = "";
+  releaseId?: string;
+  #release?: Promise<{ manifest: ReleaseManifest; baseUrl: string } | undefined>;
+  #selectedRelease?: { manifest: ReleaseManifest; baseUrl: string };
 
   constructor(
     private url: string,
@@ -12,11 +16,35 @@ export class Remote {
     private scope: string,
   ) {}
 
-  async #load() {
-    const { manifest, __baseUrl } = await this.#manifestLoader.load(
-      `${this.url}/${this.scope}/manifest.json`,
-    );
+  async #getRelease() {
+    if (!this.#release) {
+      this.#release = loadReleaseManifest(`${this.url.replace(/\/$/, "")}/manifest.json`).catch((error) => {
+        this.#release = undefined;
+        throw error;
+      });
+    }
+    return this.#release;
+  }
 
+  async #loadManifest(scope: "server" | "client", release: Awaited<ReturnType<typeof loadReleaseManifest>>): Promise<RemoteInfo> {
+    const manifestPath = release?.manifest[scope];
+    if (release && !manifestPath) {
+      throw new Error(`Release "${release.manifest.releaseId}" does not contain ${scope} assets`);
+    }
+    const url = release && manifestPath
+      ? new URL(manifestPath, release.baseUrl).href
+      : `${this.url.replace(/\/$/, "")}/${scope}/manifest.json`;
+    return this.#manifestLoader.load(url);
+  }
+
+  async #load() {
+    if (this.scope !== "server" && this.scope !== "client") {
+      throw new Error(`Unsupported remote scope: ${this.scope}`);
+    }
+    const release = await this.#getRelease();
+    const { manifest, __baseUrl } = await this.#loadManifest(this.scope, release);
+    this.releaseId = release?.manifest.releaseId;
+    this.#selectedRelease = release;
     this.manifest = manifest;
     this.baseUrl = __baseUrl;
   }
@@ -38,7 +66,7 @@ export class Remote {
     let cssBaseUrl = this.baseUrl;
     // SSR advertises the browser build's styles, not node build assets.
     if (this.scope === "server" && typeof path !== "string") {
-      const client = await this.#manifestLoader.load(`${this.url.replace(/\/$/, "")}/client/manifest.json`);
+      const client = await this.#loadManifest("client", this.#selectedRelease);
       const entry = client.manifest[name];
       if (!entry) throw new Error(`Remote "${name}" not found in client manifest`);
       css = typeof entry === "string" ? [] : entry.css;

@@ -5,6 +5,7 @@ import { resolve } from "path";
 import { renderToPipeableStream } from "react-dom/server.node";
 import { PassThrough } from "stream";
 import App from "./App";
+import { runWithMFRequest, serializeMFReleases } from "plugin-mf/server";
 
 const app: Express = express();
 const port: number = 3000;
@@ -19,7 +20,7 @@ const [head, tail] = html.split(splitPattern);
 
 app.use(express.static("dist", { index: false }));
 
-app.get("{*splat}", (req: Request, res: Response) => {
+app.get("{*splat}", (req: Request, res: Response) => runWithMFRequest(() => {
   res.statusCode = 200;
   res.setHeader("Content-type", "text/html");
 
@@ -34,7 +35,7 @@ app.get("{*splat}", (req: Request, res: Response) => {
   const stream = renderToPipeableStream(<App pathname={req.path} query={req.query} />, {
     [bot ? "onAllReady" : "onShellReady"]() {
       getBody(stream.pipe(new PassThrough()), write).then(() => {
-        res.write(tail);
+        res.write(tail.replace("</body>", `${serializeMFReleases()}</body>`));
         res.end();
       });
     },
@@ -46,7 +47,7 @@ app.get("{*splat}", (req: Request, res: Response) => {
       console.error("❌ [renderStream] \r\n", error);
     },
   });
-});
+}));
 
 app.listen(port, (): void => {
   console.log(`Example app listening on port ${port}`);

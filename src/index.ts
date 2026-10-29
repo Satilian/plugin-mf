@@ -5,7 +5,7 @@ import { resolver } from "./resolver";
 import { modifyEntry } from "./bootstrap";
 import { syncTypes } from "./sync-types";
 import { randomUUID } from "node:crypto";
-import { writeFile } from "node:fs/promises";
+import { rename, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { RELEASE_MANIFEST_VERSION, type ReleaseManifest } from "./release-manifest";
 
@@ -21,6 +21,16 @@ export const pluginMF = (mfConfig: PluginMFConfig = {}): RsbuildPlugin => ({
   setup(api) {
     let nodeConfig: Rspack.Configuration | undefined;
     let webConfig: Rspack.Configuration | undefined;
+
+    if (mfConfig.expose && Object.keys(mfConfig.expose).length) {
+      api.modifyEnvironmentConfig((config) => {
+        const clean = config.output.cleanDistPath;
+        const options = typeof clean === "object" ? clean : { enable: clean };
+        const mfPath = path.resolve(api.context.rootPath, config.output.distPath.root ?? "dist", "mf").replace(/\\/g, "/");
+        const keepMF = new RegExp(`^${mfPath.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?:/|$)`);
+        config.output.cleanDistPath = { ...options, keep: [...(options.keep ?? []), keepMF] };
+      });
+    }
 
     api.onBeforeCreateCompiler(({ bundlerConfigs }) => {
       bundlerConfigs.forEach((config) => {
@@ -54,6 +64,7 @@ export const pluginMF = (mfConfig: PluginMFConfig = {}): RsbuildPlugin => ({
       if (nodeConfig) {
         tasks.push(
           buildExpose({
+            releaseId,
             entry: mfConfig.expose,
             externals: mfConfig.externals,
             config: nodeConfig,
@@ -64,6 +75,7 @@ export const pluginMF = (mfConfig: PluginMFConfig = {}): RsbuildPlugin => ({
       if (webConfig) {
         tasks.push(
           buildExpose({
+            releaseId,
             entry: mfConfig.expose,
             externals: mfConfig.externals,
             config: webConfig,
@@ -76,17 +88,24 @@ export const pluginMF = (mfConfig: PluginMFConfig = {}): RsbuildPlugin => ({
       const outputConfig = webConfig ?? nodeConfig;
       if (outputConfig) {
         const outputPath = getMFOutputPath(outputConfig);
-        await buildTypes({ entry: mfConfig.expose, outputPath });
+        await buildTypes({ entry: mfConfig.expose, outputPath: path.join(outputPath, releaseId) });
 
         const manifest: ReleaseManifest = {
           version: RELEASE_MANIFEST_VERSION,
           releaseId,
-          ...(nodeConfig ? { server: "server/manifest.json" } : {}),
-          ...(webConfig ? { client: "client/manifest.json" } : {}),
-          types: "types/manifest.json",
+          ...(nodeConfig ? { server: `${releaseId}/server/manifest.json` } : {}),
+          ...(webConfig ? { client: `${releaseId}/client/manifest.json` } : {}),
+          types: `${releaseId}/types/manifest.json`,
         };
-        // Write the index last so consumers do not discover a partially built release.
-        await writeFile(path.join(outputPath, "manifest.json"), JSON.stringify(manifest, null, 2), "utf8");
+        const manifestSource = JSON.stringify(manifest, null, 2);
+        await writeFile(path.join(outputPath, releaseId, "pointer.json"), manifestSource, "utf8");
+        const temporaryPath = path.join(outputPath, `.manifest.${releaseId}.tmp`);
+        try {
+          await writeFile(temporaryPath, manifestSource, "utf8");
+          await rename(temporaryPath, path.join(outputPath, "manifest.json"));
+        } finally {
+          await rm(temporaryPath, { force: true });
+        }
       }
     });
 

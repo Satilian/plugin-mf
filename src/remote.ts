@@ -1,23 +1,34 @@
 import { createElement, Fragment, lazy } from "react";
 import { ManifestLoader, type RemoteManifest, type RemoteInfo } from "./manifest-loader.ts";
-import { loadReleaseManifest, type ReleaseManifest } from "./release-manifest.ts";
+import { loadReleaseManifest, type ResolvedRelease } from "./release-manifest.ts";
 
 export class Remote {
   #manifestLoader = new ManifestLoader();
+  #lazyComponents = new Map<string, ReturnType<typeof lazy>>();
   manifest?: RemoteManifest;
   baseUrl = "";
   releaseId?: string;
-  #release?: Promise<{ manifest: ReleaseManifest; baseUrl: string } | undefined>;
-  #selectedRelease?: { manifest: ReleaseManifest; baseUrl: string };
+  #release?: Promise<ResolvedRelease | undefined>;
+  #selectedRelease?: ResolvedRelease;
 
   constructor(
     private url: string,
     private moduleLoader: { load: (url: string) => Promise<any> },
     private scope: string,
+    private getPinnedRelease?: () => ResolvedRelease | null | undefined,
   ) {}
+
+  getSelectedRelease(): ResolvedRelease | null | undefined {
+    return this.manifest ? this.#selectedRelease ?? null : undefined;
+  }
 
   async #getRelease() {
     if (!this.#release) {
+      const pinned = this.getPinnedRelease?.();
+      if (pinned !== undefined) {
+        this.#release = Promise.resolve(pinned ?? undefined);
+        return this.#release;
+      }
       this.#release = loadReleaseManifest(`${this.url.replace(/\/$/, "")}/manifest.json`).catch((error) => {
         this.#release = undefined;
         throw error;
@@ -85,13 +96,18 @@ export class Remote {
     };
   }
 
-  lazyComponent(name: string) {
-    return lazy(async () => {
+  lazyComponent(name: string): ReturnType<typeof lazy> {
+    const cached = this.#lazyComponents.get(name);
+    if (cached) return cached;
+
+    const component = lazy(async () => {
       const component = await this.component(name);
 
       return {
         default: component,
       };
     });
+    this.#lazyComponents.set(name, component);
+    return component;
   }
 }

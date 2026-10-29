@@ -5,6 +5,7 @@ import { formatStats } from "./format-stats";
 import type { RemoteManifest } from "./manifest-loader";
 
 export type BuildExposeProps = {
+  releaseId: string;
   entry: Record<string, string>;
   externals?: string[];
   config: Rspack.Configuration;
@@ -17,9 +18,9 @@ export function getMFOutputPath(config: Rspack.Configuration) {
   return path.resolve(outputPath, "mf");
 }
 
-export async function buildExpose({ entry, externals, config: baseConfig }: BuildExposeProps) {
+export async function buildExpose({ entry, externals, releaseId, config: baseConfig }: BuildExposeProps) {
   const scope = baseConfig.name === "node" ? "server" : "client";
-  const outputPath = path.join(getMFOutputPath(baseConfig), scope);
+  const outputPath = path.join(getMFOutputPath(baseConfig), releaseId, scope);
 
   const config: Rspack.RspackOptions = {
     ...baseConfig,
@@ -28,6 +29,7 @@ export async function buildExpose({ entry, externals, config: baseConfig }: Buil
     output: {
       ...baseConfig.output,
       path: outputPath,
+      publicPath: "auto",
       filename: "[name].[contenthash:10].js",
       cssFilename: "[name].[contenthash:10].css",
       cssChunkFilename: "[name].[contenthash:10].css",

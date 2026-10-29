@@ -9,6 +9,11 @@ export type ReleaseManifest = {
   types: string;
 };
 
+export type ResolvedRelease = {
+  manifest: ReleaseManifest;
+  baseUrl: string;
+};
+
 export function parseReleaseManifest(value: unknown): ReleaseManifest {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     throw new Error("Invalid release manifest");
@@ -42,7 +47,7 @@ export function parseReleaseManifest(value: unknown): ReleaseManifest {
 }
 
 /** A missing release manifest is the only signal that a provider uses the legacy layout. */
-export async function loadReleaseManifest(url: string): Promise<{ manifest: ReleaseManifest; baseUrl: string } | undefined> {
+export async function loadReleaseManifest(url: string): Promise<ResolvedRelease | undefined> {
   const response = await fetch(url);
   if (response.status === 404) return undefined;
   if (!response.ok) {

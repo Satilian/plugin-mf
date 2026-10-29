@@ -1,4 +1,5 @@
 import { Remote } from "./remote";
+import { MF_RELEASES_ELEMENT_ID, parseSSRReleases, type SSRReleases } from "./ssr-releases";
 
 export class Loader {
   load(url: string) {
@@ -7,6 +8,21 @@ export class Loader {
 }
 
 const remotes = new Map<string, Remote>();
+let releases: SSRReleases | undefined;
+
+function readMFReleases(): SSRReleases | undefined {
+  if (releases) return releases;
+  const element = document.getElementById(MF_RELEASES_ELEMENT_ID);
+  if (element) releases = parseSSRReleases(JSON.parse(element.textContent || ""));
+  return releases;
+}
+
+export async function initializeMFReleases(): Promise<void> {
+  if (document.readyState === "loading") {
+    await new Promise<void>((resolve) => document.addEventListener("DOMContentLoaded", () => resolve(), { once: true }));
+  }
+  readMFReleases();
+}
 
 declare const __MF_REMOTES__: Record<string, string> | undefined;
 
@@ -15,7 +31,7 @@ function ensureInit() {
 
   const loader = new Loader();
   for (const [name, url] of Object.entries(__MF_REMOTES__ || {})) {
-    remotes.set(name, new Remote(url, loader, "client"));
+    remotes.set(name, new Remote(url, loader, "client", () => readMFReleases()?.[url.replace(/\/$/, "")]));
   }
 }
 

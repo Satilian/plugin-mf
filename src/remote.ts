@@ -1,6 +1,7 @@
 import { createElement, Fragment, lazy } from "react";
 import { ManifestLoader, type RemoteManifest, type RemoteInfo } from "./manifest-loader.ts";
 import { loadReleaseManifest, type ResolvedRelease } from "./release-manifest.ts";
+import type { ModuleLoadContext } from "./asset-path.ts";
 
 export class Remote {
   #manifestLoader = new ManifestLoader();
@@ -13,7 +14,7 @@ export class Remote {
 
   constructor(
     private url: string,
-    private moduleLoader: { load: (url: string) => Promise<any> },
+    private moduleLoader: { load: (url: string, context?: ModuleLoadContext) => Promise<any> },
     private scope: string,
     private getPinnedRelease?: () => ResolvedRelease | null | undefined,
   ) {}
@@ -68,7 +69,12 @@ export class Remote {
     if (!path) throw new Error(`Remote "${name}" not found in manifest`);
 
     const url = new URL(typeof path === "string" ? path : path.js, this.baseUrl).href;
-    const module = await this.moduleLoader.load(url);
+    const module = await this.moduleLoader.load(url, this.scope === "server" ? {
+      provider: this.url.replace(/\/$/, ""),
+      releaseId: this.releaseId,
+      baseUrl: this.baseUrl,
+      files: typeof path === "string" ? [path] : path.files ?? [path.js],
+    } : undefined);
     const component = module[name];
 
     if (!component) throw new Error(`Export "${name}" not found in ${url}`);

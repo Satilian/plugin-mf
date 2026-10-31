@@ -1,4 +1,6 @@
-export type RemoteManifest = Record<string, string | { js: string; css: string[] }>;
+import { validateAssetPath } from "./asset-path.ts";
+
+export type RemoteManifest = Record<string, string | { js: string; css: string[]; files?: string[] }>;
 
 export type RemoteInfo = {
   manifest: RemoteManifest;
@@ -51,6 +53,15 @@ export class ManifestLoader {
         typeof path.js !== "string" || !path.js || !Array.isArray(path.css) ||
         !path.css.every((asset) => typeof asset === "string" && asset.length > 0)) {
         throw new Error(`Invalid remote assets for "${name}"`);
+      }
+      if (path.files !== undefined) {
+        if (!Array.isArray(path.files) || !path.files.includes(path.js)) {
+          throw new Error(`Invalid remote files for "${name}"`);
+        }
+        for (const file of path.files) {
+          if (typeof file !== "string") throw new Error(`Invalid remote file for "${name}"`);
+          validateAssetPath(file);
+        }
       }
     }
   }

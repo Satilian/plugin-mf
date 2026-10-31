@@ -1,72 +1,11 @@
 import { Remote } from "./remote";
 import { AsyncLocalStorage } from "node:async_hooks";
 import { createElement, type ComponentType } from "react";
-import { access, mkdir, rm, writeFile } from "node:fs/promises";
-import path from "node:path";
-import { pathToFileURL } from "node:url";
 import { MF_RELEASES_ELEMENT_ID, type SSRReleases } from "./ssr-releases";
+import { Loader, type ServerCacheOptions } from "./server-cache";
 
-const CACHE_DIR = path.join(process.cwd(), "node_modules/.cache/mf");
-
-export class Loader {
-  #cache = new Map();
-  #cacheDir: string;
-  #import = new Function("fileUrl", "return import(fileUrl)");
-
-  constructor(cacheDir = CACHE_DIR) {
-    this.#cacheDir = cacheDir;
-  }
-
-  load(url: string) {
-    const cached = this.#cache.get(url);
-    if (cached) return cached;
-
-    const promise = this.#load(url);
-    this.#cache.set(url, promise);
-
-    return promise.catch((error) => {
-      this.#cache.delete(url);
-      throw error;
-    });
-  }
-
-  async #load(url: string) {
-    const fileName = url.split("/").pop() || "remote.js";
-    const filePath = path.join(this.#cacheDir, fileName);
-
-    // Пишем файл только если его ещё нет
-    try {
-      await access(filePath);
-    } catch {
-      console.log("FETCH REMOTE:", url);
-      const response = await fetch(url);
-
-      if (!response.ok) {
-        throw new Error(
-          `Failed to load remote module: ${response.status} ${response.statusText}`,
-        );
-      }
-
-      const source = await response.text();
-
-      await mkdir(this.#cacheDir, { recursive: true });
-      await writeFile(filePath, source, "utf8");
-    }
-
-    return this.#import(pathToFileURL(filePath).href);
-  }
-
-  /** Можно вызвать вручную, если нужно почистить кэш */
-  async clearCache() {
-    this.#cache.clear();
-    // При желании можно добавить удаление файлов из #cacheDir
-    try {
-      await rm(this.#cacheDir, { recursive: true, force: true });
-    } catch (error) {
-      console.error("Failed to clear cache directory:", error);
-    }
-  }
-}
+export { Loader } from "./server-cache";
+export type { ServerCacheOptions, CachePruneResult } from "./server-cache";
 
 const remotes = new Map<string, Remote>();
 // Nested remote bundles must participate in the same SSR request.
@@ -75,7 +14,20 @@ const requestGlobal = globalThis as typeof globalThis & {
   [requestContextKey]?: AsyncLocalStorage<Map<string, Remote>>;
 };
 const requestContext = requestGlobal[requestContextKey] ??= new AsyncLocalStorage<Map<string, Remote>>();
-const loader = new Loader();
+const runtimeKey = Symbol.for("plugin-mf.server-runtime");
+const runtimeGlobal = globalThis as typeof globalThis & {
+  [runtimeKey]?: { options?: ServerCacheOptions; loader?: Loader };
+};
+const runtime = runtimeGlobal[runtimeKey] ??= {};
+
+export function configureServerCache(options: ServerCacheOptions): void {
+  if (runtime.loader) throw new Error("[plugin-mf] Configure the server cache before creating remotes");
+  runtime.options = { ...options };
+}
+
+function getLoader(): Loader {
+  return runtime.loader ??= new Loader(runtime.options);
+}
 
 export function runWithMFRequest<T>(callback: () => T): T {
   return requestContext.run(new Map(), callback);
@@ -104,7 +56,7 @@ function ensureInit() {
   if (remotes.size > 0) return;
 
   for (const [name, url] of Object.entries(__MF_REMOTES__ || {})) {
-    remotes.set(name, new Remote(url, loader, "server"));
+    remotes.set(name, new Remote(url, getLoader(), "server"));
   }
 }
 
@@ -119,7 +71,7 @@ export function getRemote(name: string): Remote {
     const key = url.replace(/\/$/, "");
     let remote = requestRemotes.get(key);
     if (!remote) {
-      remote = new Remote(url, loader, "server");
+      remote = new Remote(url, getLoader(), "server");
       requestRemotes.set(key, remote);
     }
     return remote;

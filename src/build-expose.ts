@@ -73,6 +73,10 @@ export async function buildExpose({ entry, externals, releaseId, config: baseCon
     config.optimization.splitChunks = false;
 
   }
+  if (scope === "server") {
+    config.output.chunkFormat = "module";
+    config.output.chunkLoading = "import";
+  }
 
   const compiler = rspack(config);
 
@@ -91,12 +95,13 @@ export async function buildExpose({ entry, externals, releaseId, config: baseCon
         }
 
         const manifest: RemoteManifest = {};
+        const files = scope === "server" ? stats?.compilation.getAssets().map((asset) => asset.name).sort() : undefined;
         for (const [name, entrypoint] of Object.entries(stats?.toJson({ entrypoints: true }).entrypoints ?? {})) {
           const assets = entrypoint.assets?.map((asset) => asset.name) ?? [];
           const js = assets.filter((asset) => /\.m?js$/.test(asset));
           if (js.length !== 1)
             return reject(new Error(`[plugin-mf] Expected one JS entry for "${name}", got ${js.length}`));
-          manifest[name] = { js: js[0], css: assets.filter((asset) => asset.endsWith(".css")) };
+          manifest[name] = { js: js[0], css: assets.filter((asset) => asset.endsWith(".css")), ...(files ? { files } : {}) };
         }
 
         resolve({ manifest, stats });

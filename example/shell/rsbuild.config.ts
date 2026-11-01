@@ -35,6 +35,7 @@ export default defineConfig(() => {
       pluginReact(),
       pluginMF({
         ...mfTypes,
+        network: { requireServerIntegrity: true },
         loading: {
           manifestTimeoutMs: 2_000,
           moduleTimeoutMs: 6_000,

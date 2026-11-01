@@ -1,6 +1,6 @@
 import { validateAssetPath } from "./asset-path.ts";
 
-export type RemoteManifest = Record<string, string | { js: string; css: string[]; files?: string[] }>;
+export type RemoteManifest = Record<string, string | { js: string; css: string[]; files?: string[]; integrity?: Record<string, string> }>;
 
 export type RemoteInfo = {
   manifest: RemoteManifest;
@@ -27,6 +27,13 @@ export function parseRemoteManifest(value: unknown): RemoteManifest {
       for (const file of path.files) {
         if (typeof file !== "string") throw new Error(`Invalid remote file for "${name}"`);
         validateAssetPath(file);
+      }
+    }
+    if (path.integrity !== undefined) {
+      if (!path.integrity || typeof path.integrity !== "object" || Array.isArray(path.integrity) || !path.files ||
+        Object.keys(path.integrity).length !== path.files.length ||
+        !path.files.every((file: string) => typeof path.integrity[file] === "string" && /^[a-f0-9]{64}$/.test(path.integrity[file]))) {
+        throw new Error(`Invalid server integrity for "${name}"`);
       }
     }
   }

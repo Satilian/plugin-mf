@@ -1,5 +1,6 @@
 import { rspack, type Rspack } from "@rsbuild/core";
-import { writeFile } from "node:fs/promises";
+import { readFile, writeFile } from "node:fs/promises";
+import { createHash } from "node:crypto";
 import path from "node:path";
 import { formatStats } from "./format-stats.ts";
 import type { RemoteManifest } from "../protocol/remote-manifest.ts";
@@ -118,6 +119,13 @@ export async function buildExpose({ entry, externals, releaseId, config: baseCon
         }),
       );
 
+    if (scope === "server") {
+      for (const entry of Object.values(manifest)) {
+        if (typeof entry === "string") continue;
+        entry.integrity = Object.fromEntries(await Promise.all((entry.files ?? []).map(async (file) =>
+          [file, createHash("sha256").update(await readFile(path.join(outputPath, file))).digest("hex")])));
+      }
+    }
     await writeFile(path.join(outputPath, "manifest.json"), JSON.stringify(manifest, null, 2), "utf8");
   } finally {
     await new Promise<void>((resolve, reject) => {

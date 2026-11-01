@@ -3,6 +3,7 @@ export type ModuleLoadContext = {
   releaseId?: string;
   baseUrl: string;
   files: string[];
+  integrity?: Record<string, string>;
 };
 
 export type RemoteScope = "client" | "server";

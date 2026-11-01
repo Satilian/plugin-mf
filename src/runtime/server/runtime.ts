@@ -5,6 +5,8 @@ import { MF_RELEASES_ELEMENT_ID, type SSRReleases } from "../../protocol/ssr-rel
 import { Loader, type ServerCacheOptions } from "./loader.ts";
 import { configureLoading } from "../../transport/loading.ts";
 import { RemoteLoadError, type LoadingOptions } from "../../protocol/load-error.ts";
+import { configureNetwork } from "../../transport/network-policy.ts";
+import type { NetworkOptions } from "../../protocol/network-policy.ts";
 
 export { Loader } from "./loader.ts";
 export type { ServerCacheOptions, CachePruneResult } from "./loader.ts";
@@ -57,6 +59,8 @@ export function serializeMFReleases(): string {
 
 declare const __MF_REMOTES__: Record<string, string> | undefined;
 declare const __MF_LOADING__: LoadingOptions | undefined;
+declare const __MF_NETWORK__: NetworkOptions | undefined;
+if (typeof __MF_NETWORK__ !== "undefined") configureNetwork(__MF_NETWORK__);
 if (typeof __MF_LOADING__ !== "undefined") configureLoading(__MF_LOADING__);
 
 function ensureInit() {

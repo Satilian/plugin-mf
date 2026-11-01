@@ -1,5 +1,6 @@
 export { pluginMF } from "./build/plugin.ts";
 export type { PluginMFConfig } from "./build/config.ts";
+export type { NetworkOptions } from "./protocol/network-policy.ts";
 export type { SharedConfig, SharedDependency } from "./protocol/shared-dependencies.ts";
 export type { LoadingOptions } from "./protocol/load-error.ts";
 export { syncTypes } from "./build/sync-types.ts";

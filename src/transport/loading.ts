@@ -1,4 +1,5 @@
 import { RemoteLoadError, type LoadContext, type LoadingOptions } from "../protocol/load-error.ts";
+import { assertRemoteURL } from "./network-policy.ts";
 
 type Policy = Required<Omit<LoadingOptions, "circuitBreaker">> & {
   circuitBreaker: { failureThreshold: number; cooldownMs: number };
@@ -94,7 +95,21 @@ export async function fetchResource<T>(url: string, context: LoadContext, read: 
   const policy = loadingPolicy();
   const timeout = context.stage === "types" ? policy.typesTimeoutMs : context.stage === "module" ? policy.moduleTimeoutMs : policy.manifestTimeoutMs;
   return withDeadline(context, timeout, (active) => retryNetwork(async () => {
-    const response = await fetch(url, { signal: active });
+    let target = assertRemoteURL(url, context.remote);
+    let response: Response;
+    for (let redirects = 0; ; redirects++) {
+      response = await fetch(target, { signal: active, redirect: "manual" });
+      if (response.type === "opaqueredirect") throw new RemoteLoadError(context, "LOAD_FAILED", "Opaque browser redirects are not allowed");
+      if (response.status >= 300 && response.status < 400) {
+        const location = response.headers.get("location");
+        await response.body?.cancel();
+        if (!location || redirects >= 5) throw new RemoteLoadError(context, "LOAD_FAILED", "Invalid redirect chain");
+        target = assertRemoteURL(new URL(location, target).href, context.remote);
+        continue;
+      }
+      assertRemoteURL(response.url || target, context.remote);
+      break;
+    }
     if (allow404 && response.status === 404) {
       await response.body?.cancel();
       return undefined;

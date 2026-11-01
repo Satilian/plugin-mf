@@ -7,10 +7,12 @@ import { syncTypes } from "./sync-types.ts";
 import type { PluginMFConfig } from "./config.ts";
 import { configureLoading } from "../transport/loading.ts";
 import { resolveShared } from "./shared-dependencies.ts";
+import { configureNetwork } from "../transport/network-policy.ts";
 
 export const pluginMF = (mfConfig: PluginMFConfig = {}): RsbuildPlugin => ({
   name: "plugin-mf",
   setup(api) {
+    if (mfConfig.network) configureNetwork(mfConfig.network);
     const shared = resolveShared(mfConfig.shared, api.context.rootPath);
     const externals = resolveShared(mfConfig.externals, api.context.rootPath);
     if (mfConfig.loading) configureLoading(mfConfig.loading);
@@ -70,6 +72,7 @@ export const pluginMF = (mfConfig: PluginMFConfig = {}): RsbuildPlugin => ({
           new rspack.DefinePlugin({
             __MF_REMOTES__: JSON.stringify(mfConfig.remotes),
             __MF_LOADING__: JSON.stringify(mfConfig.loading ?? {}),
+            __MF_NETWORK__: JSON.stringify(mfConfig.network ?? {}),
           }),
         );
 

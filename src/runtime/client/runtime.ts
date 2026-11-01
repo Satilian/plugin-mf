@@ -1,18 +1,22 @@
 import type { ModuleLoader, RemoteModule, ModuleLoadContext } from "../../protocol/module.ts";
 import { createElement, type ComponentType } from "react";
-import { configureLoading, loadingPolicy, retryNetwork, withDeadline } from "../../transport/loading.ts";
+import { configureLoading, fetchResource, loadingPolicy, retryNetwork, withDeadline } from "../../transport/loading.ts";
 import { RemoteLoadError, type LoadingOptions } from "../../protocol/load-error.ts";
+import { assertRemoteURL, configureNetwork } from "../../transport/network-policy.ts";
+import type { NetworkOptions } from "../../protocol/network-policy.ts";
 
 import { Remote } from "../react/remote.ts";
 import { MF_RELEASES_ELEMENT_ID, parseSSRReleases, type SSRReleases } from "../../protocol/ssr-releases.ts";
 
-const importModule = new Function("u", "return import(u)") as (url: string) => Promise<RemoteModule>;
+const importModule = (url: string): Promise<RemoteModule> => import(/* webpackIgnore: true, reason: "@preserve native import" */ url);
 
 export class Loader implements ModuleLoader {
   #cache = new Map<string, Promise<RemoteModule>>();
   #attempts = new Map<string, number>();
 
   load(url: string, context?: ModuleLoadContext): Promise<RemoteModule> {
+    const provider = context?.provider ?? url;
+    assertRemoteURL(url, provider);
     const cached = this.#cache.get(url);
     if (cached) return cached;
     const attempt = this.#attempts.get(url) ?? 0;
@@ -22,7 +26,11 @@ export class Loader implements ModuleLoader {
         const generation = attempt + retry;
         this.#attempts.set(url, generation);
         if (generation) target.searchParams.set("mf_retry", String(generation));
-        return importModule(target.href);
+        const checked = await fetchResource(target.href, { remote: provider, releaseId: context?.releaseId, stage: "module" }, async (response) => {
+          await response.arrayBuffer();
+          return response.url || target.href;
+        }, signal);
+        return importModule(checked);
       }, signal, (error) => error instanceof TypeError && /failed to fetch dynamically imported module|error loading dynamically imported module|failed to load module script|importing a module script failed/i.test(error.message))).catch((error: unknown) => {
       this.#cache.delete(url);
       this.#attempts.set(url, (this.#attempts.get(url) ?? attempt) + 1);
@@ -52,6 +60,8 @@ export async function initializeMFReleases(): Promise<void> {
 
 declare const __MF_REMOTES__: Record<string, string> | undefined;
 declare const __MF_LOADING__: LoadingOptions | undefined;
+declare const __MF_NETWORK__: NetworkOptions | undefined;
+if (typeof __MF_NETWORK__ !== "undefined") configureNetwork(__MF_NETWORK__);
 
 function ensureInit() {
   if (remotes.size > 0) return;

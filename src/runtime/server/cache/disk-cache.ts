@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { lstat, mkdir, mkdtemp, open, readFile, realpath, rename, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { hasCode, withCacheLock } from "./lock.ts";
@@ -68,6 +68,7 @@ export class DiskCache {
         deadlineSignal.throwIfAborted();
         const results = await Promise.allSettled(entry.files.slice(offset, offset + 8).map(async (file) => {
           const buffer = Buffer.from(await fetchResource(file.url, context, (response) => response.arrayBuffer(), deadlineSignal));
+          if (file.integrity && createHash("sha256").update(buffer).digest("hex") !== file.integrity) throw new Error(`[plugin-mf] Server asset integrity mismatch: ${file.path}`);
           deadlineSignal.throwIfAborted();
           downloadedBytes += buffer.byteLength;
           if (downloadedBytes > this.#maxBytes) throw new Error("[plugin-mf] Server release exceeds cache maxBytes");
@@ -111,7 +112,12 @@ export class DiskCache {
         await regularFile(directory, ".ready.json");
         await regularFile(directory, "package.json");
         ready = await readFile(path.join(directory, ".ready.json"), "utf8") === JSON.stringify(entry.files);
-        if (ready) for (const file of entry.files) await regularFile(directory, file.path);
+        if (ready) for (const file of entry.files) {
+          await regularFile(directory, file.path);
+          if (file.integrity && createHash("sha256").update(await readFile(inside(directory, file.path))).digest("hex") !== file.integrity) {
+            throw new Error(`[plugin-mf] Cached server asset integrity mismatch: ${file.path}`);
+          }
+        }
       } catch (error) {
         if (!hasCode(error, "ENOENT")) throw error;
         ready = false;

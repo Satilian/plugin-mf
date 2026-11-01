@@ -6,6 +6,7 @@ import type { ModuleLoader, RemoteScope } from "../../protocol/module.ts";
 import { RemoteLoadError, type LoadContext, type LoadStage } from "../../protocol/load-error.ts";
 import { loadingPolicy, withDeadline, withProvider } from "../../transport/loading.ts";
 import { assertSharedRequirements } from "../../sharing/registry.ts";
+import { assertRemoteURL } from "../../transport/network-policy.ts";
 
 type RemoteExport = { value: unknown; stylesheets: string[] };
 
@@ -103,11 +104,13 @@ export class RemoteSource {
     if (!path) throw new RemoteLoadError(this.context("manifest"), "LOAD_FAILED", `Remote "${name}" not found in manifest`);
 
     const url = new URL(typeof path === "string" ? path : path.js, this.baseUrl).href;
+    assertRemoteURL(url, this.url);
     const module = await this.moduleLoader.load(url, {
       provider: this.url.replace(/\/$/, ""),
       releaseId: this.releaseId,
       baseUrl: this.baseUrl,
       files: typeof path === "string" ? [path] : path.files ?? [path.js],
+      integrity: typeof path === "string" ? undefined : path.integrity,
     });
     const component = module[name];
 
@@ -125,6 +128,6 @@ export class RemoteSource {
       cssBaseUrl = client.__baseUrl;
     }
 
-    return { value: component, stylesheets: [...new Set(css.map((asset) => new URL(asset, cssBaseUrl).href))] };
+    return { value: component, stylesheets: [...new Set(css.map((asset) => assertRemoteURL(new URL(asset, cssBaseUrl).href, this.url)))] };
   }
 }

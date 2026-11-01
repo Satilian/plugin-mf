@@ -10,6 +10,7 @@ export type BuildExposeProps = {
   releaseId: string;
   entry: Record<string, string>;
   externals?: SharedRequirements;
+  splitChunks?: boolean;
   config: Rspack.Configuration;
 };
 
@@ -20,7 +21,7 @@ export function getMFOutputPath(config: Rspack.Configuration) {
   return path.resolve(outputPath, "mf");
 }
 
-export async function buildExpose({ entry, externals, releaseId, config: baseConfig }: BuildExposeProps) {
+export async function buildExpose({ entry, externals, splitChunks = false, releaseId, config: baseConfig }: BuildExposeProps) {
   const scope = baseConfig.name === "node" ? "server" : "client";
   const outputPath = path.join(getMFOutputPath(baseConfig), releaseId, scope);
 
@@ -72,7 +73,7 @@ export async function buildExpose({ entry, externals, releaseId, config: baseCon
     config.output.chunkFormat = "module";
     config.output.chunkLoading = "import";
 
-    config.optimization.splitChunks = false;
+    config.optimization.splitChunks = splitChunks ? { chunks: "all", minSize: 0 } : false;
 
   }
   if (scope === "server") {
@@ -100,10 +101,15 @@ export async function buildExpose({ entry, externals, releaseId, config: baseCon
         const files = scope === "server" ? stats?.compilation.getAssets().map((asset) => asset.name).sort() : undefined;
         for (const [name, entrypoint] of Object.entries(stats?.toJson({ entrypoints: true }).entrypoints ?? {})) {
           const assets = entrypoint.assets?.map((asset) => asset.name) ?? [];
-          const js = assets.filter((asset) => /\.m?js$/.test(asset));
+          const outputEntry = stats?.compilation.entrypoints.get(name)?.getEntrypointChunk();
+          const js = [...(outputEntry?.files ?? [])].filter((asset) => /\.m?js$/.test(asset));
           if (js.length !== 1)
             return reject(new Error(`[plugin-mf] Expected one JS entry for "${name}", got ${js.length}`));
-          manifest[name] = { js: js[0], css: assets.filter((asset) => asset.endsWith(".css")), ...(files ? { files } : {}) };
+          const emitted = stats?.compilation.getAssets() ?? [];
+          manifest[name] = { js: js[0], css: assets.filter((asset) => asset.endsWith(".css")), ...(files ? { files } : {}),
+            ...(scope === "client" ? { assets: emitted.filter((asset) => /\.(?:m?js|css)$/.test(asset.name)).map((asset) => ({
+              path: asset.name, bytes: asset.source.size(), type: asset.name.endsWith(".css") ? "css" as const : "js" as const,
+            })) } : {}) };
         }
 
         resolve({ manifest, stats });
@@ -118,6 +124,15 @@ export async function buildExpose({ entry, externals, releaseId, config: baseCon
           environment: config.name || "",
         }),
       );
+
+    if (scope === "client" && stats) {
+      const modules = stats.toJson({ modules: true, nestedModules: true }).modules ?? [];
+      const duplicates = modules.filter((module) => (module.chunks?.length ?? 0) > 1).map((module) => ({
+        name: module.name, bytes: module.size, copies: module.chunks?.length,
+      }));
+      await writeFile(path.join(outputPath, "bundle-report.json"), JSON.stringify({ splitChunks, duplicates,
+        assets: stats.compilation.getAssets().map((asset) => ({ path: asset.name, bytes: asset.source.size() })) }, null, 2), "utf8");
+    }
 
     if (scope === "server") {
       for (const entry of Object.values(manifest)) {

@@ -8,6 +8,8 @@ import { RemoteLoadError, type LoadingOptions } from "../../protocol/load-error.
 import { configureNetwork } from "../../transport/network-policy.ts";
 import type { NetworkOptions } from "../../protocol/network-policy.ts";
 import { setObservationContext } from "../../transport/observability.ts";
+import { preload } from "../core/preload.ts";
+import type { PreloadOptions, PreloadTarget } from "../../protocol/preload.ts";
 
 export { Loader } from "./loader.ts";
 export type { ServerCacheOptions, CachePruneResult } from "./loader.ts";
@@ -101,6 +103,10 @@ export function getRemote(name: string): Remote {
   }
 
   return remote;
+}
+
+export function preloadRemotes(targets: PreloadTarget[], options?: PreloadOptions): Promise<void> {
+  return preload(targets.map(({ remote, expose }) => ({ source: getRemote(remote), expose })), options);
 }
 
 export function createRemoteComponent<Props extends object = Record<string, unknown>>(

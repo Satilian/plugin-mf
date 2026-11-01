@@ -1,0 +1,116 @@
+{
+  "node": "v24.22.1",
+  "platform": "win32",
+  "runs": 3,
+  "note": "Chrome CDP encoded script/style bytes; fresh/reused browser cache; server cache is not reset between samples",
+  "samples": [
+    {
+      "route": "/",
+      "run": 0,
+      "cache": "cold-browser",
+      "interactiveMs": 907,
+      "jsBytes": 1773182,
+      "cssBytes": 3014,
+      "requests": 16
+    },
+    {
+      "route": "/",
+      "run": 0,
+      "cache": "repeat-browser",
+      "interactiveMs": 431,
+      "jsBytes": 3490,
+      "cssBytes": 1154,
+      "requests": 16
+    },
+    {
+      "route": "/",
+      "run": 1,
+      "cache": "cold-browser",
+      "interactiveMs": 485,
+      "jsBytes": 1773182,
+      "cssBytes": 3014,
+      "requests": 16
+    },
+    {
+      "route": "/",
+      "run": 1,
+      "cache": "repeat-browser",
+      "interactiveMs": 434,
+      "jsBytes": 3490,
+      "cssBytes": 1154,
+      "requests": 16
+    },
+    {
+      "route": "/",
+      "run": 2,
+      "cache": "cold-browser",
+      "interactiveMs": 444,
+      "jsBytes": 1773182,
+      "cssBytes": 3014,
+      "requests": 16
+    },
+    {
+      "route": "/",
+      "run": 2,
+      "cache": "repeat-browser",
+      "interactiveMs": 442,
+      "jsBytes": 3490,
+      "cssBytes": 1154,
+      "requests": 16
+    },
+    {
+      "route": "/about",
+      "run": 0,
+      "cache": "cold-browser",
+      "interactiveMs": 535,
+      "jsBytes": 1820954,
+      "cssBytes": 3118,
+      "requests": 15
+    },
+    {
+      "route": "/about",
+      "run": 0,
+      "cache": "repeat-browser",
+      "interactiveMs": 423,
+      "jsBytes": 3193,
+      "cssBytes": 1154,
+      "requests": 15
+    },
+    {
+      "route": "/about",
+      "run": 1,
+      "cache": "cold-browser",
+      "interactiveMs": 537,
+      "jsBytes": 1820954,
+      "cssBytes": 3118,
+      "requests": 15
+    },
+    {
+      "route": "/about",
+      "run": 1,
+      "cache": "repeat-browser",
+      "interactiveMs": 416,
+      "jsBytes": 3193,
+      "cssBytes": 1154,
+      "requests": 15
+    },
+    {
+      "route": "/about",
+      "run": 2,
+      "cache": "cold-browser",
+      "interactiveMs": 480,
+      "jsBytes": 1820954,
+      "cssBytes": 3118,
+      "requests": 15
+    },
+    {
+      "route": "/about",
+      "run": 2,
+      "cache": "repeat-browser",
+      "interactiveMs": 398,
+      "jsBytes": 3193,
+      "cssBytes": 1154,
+      "requests": 15
+    }
+  ]
+}

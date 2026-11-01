@@ -54,7 +54,7 @@ export const pluginMF = (mfConfig: PluginMFConfig = {}): RsbuildPlugin => ({
     api.onAfterBuild(async () => {
       if (!mfConfig.expose || Object.keys(mfConfig.expose).length === 0) return;
 
-      await buildRelease({ entry: mfConfig.expose, externals, nodeConfig, webConfig, rootPath: api.context.rootPath });
+      await buildRelease({ entry: mfConfig.expose, externals, splitChunks: mfConfig.splitChunks, nodeConfig, webConfig, rootPath: api.context.rootPath });
     });
 
     const remoteNames = Object.keys(mfConfig.remotes || {});

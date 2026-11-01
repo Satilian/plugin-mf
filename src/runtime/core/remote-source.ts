@@ -8,6 +8,7 @@ import { loadingPolicy, withDeadline, withProvider } from "../../transport/loadi
 import { assertSharedRequirements } from "../../sharing/registry.ts";
 import { assertRemoteURL } from "../../transport/network-policy.ts";
 import { emitLoadingEvent, observeLoading } from "../../transport/observability.ts";
+import type { RemoteAsset } from "../../protocol/preload.ts";
 
 type RemoteExport = { value: unknown; stylesheets: string[] };
 
@@ -32,6 +33,20 @@ export class RemoteSource {
     const context: LoadContext = { remote: this.url.replace(/\/$/, ""), stage };
     Object.defineProperty(context, "releaseId", { enumerable: true, get: () => this.releaseId });
     return context;
+  }
+
+  get provider(): string { return this.url.replace(/\/$/, ""); }
+
+  async inspectExport(name: string): Promise<{ measured: boolean; assets: (RemoteAsset & { url: string })[] }> {
+    return withDeadline(this.context("manifest"), loadingPolicy().moduleTimeoutMs, async (signal) => {
+      if (!this.manifest) await this.#load(signal);
+      const info = this.scope === "client" ? { manifest: this.manifest, __baseUrl: this.baseUrl }
+        : await this.#loadManifest("client", this.#selectedRelease, signal);
+      const entry = info.manifest?.[name];
+      if (!entry) throw new RemoteLoadError(this.context("manifest"), "LOAD_FAILED", `Remote "${name}" not found`);
+      return { measured: typeof entry !== "string" && entry.assets !== undefined,
+        assets: typeof entry === "string" ? [] : (entry.assets ?? []).map((asset) => ({ ...asset, url: assertRemoteURL(new URL(asset.path, info.__baseUrl).href, this.url) })) };
+    }, this.signal);
   }
 
   getSelectedRelease(): ResolvedRelease | null | undefined {

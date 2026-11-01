@@ -1,4 +1,5 @@
-export { Loader, getRemote, initializeMFReleases, createRemoteComponent } from "./runtime/client/runtime.ts";
+export { Loader, getRemote, initializeMFReleases, createRemoteComponent, preloadRemotes } from "./runtime/client/runtime.ts";
+export type { PreloadTarget, PreloadOptions } from "./protocol/preload.ts";
 export { configureLoading } from "./transport/loading.ts";
 export { configureObservability, getLoadingMetrics } from "./transport/observability.ts";
 export type { LoadingEvent, LoadingEventHandler, LoadingMetrics } from "./protocol/observability.ts";

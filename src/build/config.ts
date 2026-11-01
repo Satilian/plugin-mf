@@ -4,6 +4,7 @@ import type { SharedDependency } from "../protocol/shared-dependencies.ts";
 import type { NetworkOptions } from "../protocol/network-policy.ts";
 
 export type PluginMFConfig = {
+  splitChunks?: boolean;
   network?: NetworkOptions;
   types?: TypesSyncOptions;
   loading?: LoadingOptions;

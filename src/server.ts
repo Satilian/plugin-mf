@@ -1,4 +1,5 @@
-export { Loader, configureServerCache, runWithMFRequest, getMFReleases, serializeMFReleases, getRemote, createRemoteComponent } from "./runtime/server/runtime.ts";
+export { Loader, configureServerCache, runWithMFRequest, getMFReleases, serializeMFReleases, getRemote, createRemoteComponent, preloadRemotes } from "./runtime/server/runtime.ts";
+export type { PreloadTarget, PreloadOptions } from "./protocol/preload.ts";
 export type { ServerCacheOptions, CachePruneResult } from "./runtime/server/runtime.ts";
 export { configureLoading } from "./transport/loading.ts";
 export { configureObservability, getLoadingMetrics } from "./transport/observability.ts";

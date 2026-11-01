@@ -10,12 +10,13 @@ import type { SharedRequirements } from "../protocol/shared-dependencies.ts";
 type BuildReleaseOptions = {
   entry: Record<string, string>;
   externals?: SharedRequirements;
+  splitChunks?: boolean;
   nodeConfig?: Rspack.Configuration;
   webConfig?: Rspack.Configuration;
   rootPath: string;
 };
 
-export async function buildRelease({ entry, externals, nodeConfig, webConfig, rootPath }: BuildReleaseOptions): Promise<void> {
+export async function buildRelease({ entry, externals, splitChunks, nodeConfig, webConfig, rootPath }: BuildReleaseOptions): Promise<void> {
   const releaseId = randomUUID();
   const tasks: Promise<void>[] = [];
 
@@ -25,6 +26,7 @@ export async function buildRelease({ entry, externals, nodeConfig, webConfig, ro
         releaseId,
         entry,
         externals,
+        splitChunks,
         config: nodeConfig,
       }),
     );
@@ -36,6 +38,7 @@ export async function buildRelease({ entry, externals, nodeConfig, webConfig, ro
         releaseId,
         entry,
         externals,
+        splitChunks,
         config: webConfig,
       }),
     );

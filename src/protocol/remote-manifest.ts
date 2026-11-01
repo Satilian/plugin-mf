@@ -1,6 +1,7 @@
 import { validateAssetPath } from "./asset-path.ts";
+import type { RemoteAsset } from "./preload.ts";
 
-export type RemoteManifest = Record<string, string | { js: string; css: string[]; files?: string[]; integrity?: Record<string, string> }>;
+export type RemoteManifest = Record<string, string | { js: string; css: string[]; files?: string[]; integrity?: Record<string, string>; assets?: RemoteAsset[] }>;
 
 export type RemoteInfo = {
   manifest: RemoteManifest;
@@ -34,6 +35,14 @@ export function parseRemoteManifest(value: unknown): RemoteManifest {
         Object.keys(path.integrity).length !== path.files.length ||
         !path.files.every((file: string) => typeof path.integrity[file] === "string" && /^[a-f0-9]{64}$/.test(path.integrity[file]))) {
         throw new Error(`Invalid server integrity for "${name}"`);
+      }
+    }
+    if (path.assets !== undefined) {
+      if (!Array.isArray(path.assets)) throw new Error(`Invalid asset sizes for "${name}"`);
+      for (const asset of path.assets) {
+        if (!asset || typeof asset !== "object" || typeof asset.path !== "string" ||
+          !Number.isSafeInteger(asset.bytes) || asset.bytes < 0 || (asset.type !== "js" && asset.type !== "css")) throw new Error(`Invalid asset size for "${name}"`);
+        validateAssetPath(asset.path);
       }
     }
   }

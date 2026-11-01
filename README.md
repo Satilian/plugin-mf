@@ -333,6 +333,48 @@ cacheHits, retries, downloadedBytes, diskHits, diskDownloads и prunedBytes.
 события своим handler. URL в событиях очищены от credentials, query и fragment;
 ошибка содержит только code/status. Исходные cause и тела ответов не экспортируются.
 
+## Chunks, preload и бюджеты маршрута
+
+`pluginMF({ splitChunks: true })` разрешает общие browser chunks provider.
+Entry выбирается из entrypoint chunk, манифест содержит размеры всего набора JS/CSS,
+а ESM entry загружает общие chunks из того же release path. По умолчанию splitChunks
+выключен: больше chunks не гарантирует ускорение. Для каждого client build создаётся
+`bundle-report.json` с размерами assets и модулями, присутствующими в нескольких
+chunks. Размеры модулей в отчёте приблизительные, без gzip; внешние модули могут
+появляться как несколько маленьких ссылок, а не реальные копии пакета.
+
+`preloadRemotes([{ remote: "host1", expose: "Div" }], { concurrency: 4, maxRemotes: 3,
+maxJSBytes: 5000000, maxCSSBytes: 200000 })` доступен из client/server.
+Сначала загружаются только манифесты выбранных exposes, проверяются бюджеты, затем
+выполняются импорты с ограничением числа одновременных preload-задач. Если бюджет
+превышен, ни один модуль этой попытки не импортируется. maxRemotes считает разные
+providers; JS/CSS учитываются один раз по полному asset URL. Манифест консервативно
+описывает весь client-набор provider, включая отложенные chunks; бюджет является
+верхней границей, а не прогнозом фактических bytes маршрута. Включайте в маршрут
+layout и вложенные remotes. Legacy без размеров не поддерживает byte-бюджеты.
+
+Preload прогревает модульный кеш; CSS применяется при последующем рендере компонента.
+`signal` останавливает постановку новых задач, уже начатые общие загрузки сохраняются.
+Ограничение относится к задачам, native import может параллельно загрузить свои chunks.
+Пример shell запускает preload следующей страницы при hover/focus ссылки и сохраняет
+локальный fallback при ошибке.
+
+`pnpm benchmark:routes` измеряет Home/About через локальный Playwright и Chrome.
+Если Playwright установлен отдельно, передайте `--playwright-module` с file URL
+его index.mjs. `--output` выбирает JSON-файл; `--runs` — число повторов. CDP считает
+encoded bytes JS/CSS, включая fetch-проверку entry перед native import; измерение
+заканчивается после проверки интерактивности вложенного компонента. Fresh/reused
+browser contexts разделяют холодный и повторный браузерный кеш; серверный кеш между
+образцами не очищается. Это локальный smoke benchmark, не production SLA.
+
+Результаты сравнения одной версии кода с выключенным/включённым splitChunks находятся
+в `benchmarks/P2.2-before.json` и `benchmarks/P2.2-after.json` (по три прогона).
+Home: холодный JS 1773182 → 1758371 bytes, запросы 16 → 19.
+About: 1820954 → 1830858 bytes, запросы 15 → 19.
+Медиана интерактивности cold Home 485 → 511 ms, About 535 → 475 ms;
+малый объём выборки и React Refresh делают задержки шумными. Поэтому в этих примерах
+разделение не включено по умолчанию; включайте его для конкретного workload после замеров.
+
 ## Архитектура и проверка изменений
 
 Пакет сохраняет четыре публичных входа: основной Rsbuild-плагин, client, server и shared.

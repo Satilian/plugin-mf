@@ -5,6 +5,8 @@ import { RemoteLoadError, type LoadingOptions } from "../../protocol/load-error.
 import { assertRemoteURL, configureNetwork } from "../../transport/network-policy.ts";
 import type { NetworkOptions } from "../../protocol/network-policy.ts";
 import { emitLoadingEvent, observeLoading } from "../../transport/observability.ts";
+import { preload } from "../core/preload.ts";
+import type { PreloadOptions, PreloadTarget } from "../../protocol/preload.ts";
 
 import { Remote } from "../react/remote.ts";
 import { MF_RELEASES_ELEMENT_ID, parseSSRReleases, type SSRReleases } from "../../protocol/ssr-releases.ts";
@@ -87,6 +89,10 @@ export function getRemote(name: string): Remote {
   }
 
   return remote;
+}
+
+export function preloadRemotes(targets: PreloadTarget[], options?: PreloadOptions): Promise<void> {
+  return preload(targets.map(({ remote, expose }) => ({ source: getRemote(remote), expose })), options);
 }
 
 export function createRemoteComponent<Props extends object = Record<string, unknown>>(remoteName: string, expose: string): ComponentType<Props> {

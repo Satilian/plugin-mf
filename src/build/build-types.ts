@@ -2,19 +2,16 @@ import path from "node:path";
 import { mkdir, rm, writeFile } from "node:fs/promises";
 import ts from "typescript";
 
-export type RemoteTypeManifest = {
-  version: 1;
-  files: string[];
-  exposes: Record<string, { path: string; export: string }>;
-};
+import type { RemoteTypeManifest } from "../protocol/type-manifest.ts";
 
 type BuildTypesProps = {
+  rootPath: string;
   entry: Record<string, string>;
   outputPath: string;
 };
 
-export async function buildTypes({ entry, outputPath }: BuildTypesProps) {
-  const configPath = ts.findConfigFile(process.cwd(), ts.sys.fileExists, "tsconfig.json");
+export async function buildTypes({ entry, outputPath, rootPath }: BuildTypesProps) {
+  const configPath = ts.findConfigFile(rootPath, ts.sys.fileExists, "tsconfig.json");
   if (!configPath) throw new Error("[plugin-mf] Unable to find tsconfig.json for remote type generation");
 
   const config = ts.readConfigFile(configPath, ts.sys.readFile);

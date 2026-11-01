@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import { afterEach, test } from "node:test";
-import { parseReleaseManifest, loadReleaseManifest } from "./release-manifest.ts";
-import { Remote } from "./remote.ts";
+import { parseReleaseManifest } from "./protocol/release-manifest.ts";
+import { loadReleaseManifest } from "./transport/release-loader.ts";
+import { Remote } from "./runtime/react/remote.ts";
 
 const originalFetch = globalThis.fetch;
 afterEach(() => { globalThis.fetch = originalFetch; });
@@ -11,7 +12,7 @@ function response(body: unknown, url: string, status = 200): Response {
     json: async () => body } as Response;
 }
 
-test("release manifest validates version, paths and identifier", () => {
+void test("release manifest validates version, paths and identifier", () => {
   const valid = { version: 1, releaseId: "release-123", server: "server/manifest.json",
     client: "client/manifest.json", types: "types/manifest.json" };
   assert.deepEqual(parseReleaseManifest(valid), valid);
@@ -22,14 +23,14 @@ test("release manifest validates version, paths and identifier", () => {
   ]) assert.throws(() => parseReleaseManifest(invalid));
 });
 
-test("only 404 selects legacy layout", async () => {
+void test("only 404 selects legacy layout", async () => {
   globalThis.fetch = async (url) => response(null, String(url), 404);
   assert.equal(await loadReleaseManifest("https://example.test/mf/manifest.json"), undefined);
   globalThis.fetch = async (url) => response(null, String(url), 500);
   await assert.rejects(loadReleaseManifest("https://example.test/mf/manifest.json"), /500/);
 });
 
-test("server resolves both manifests from the same release", async () => {
+void test("server resolves both manifests from the same release", async () => {
   const urls: string[] = [];
   globalThis.fetch = async (input) => {
     const url = String(input);
@@ -49,7 +50,7 @@ test("server resolves both manifests from the same release", async () => {
     "https://example.test/mf/releases/r1/client/manifest.json"]);
 });
 
-test("legacy remote uses scope manifests without a release", async () => {
+void test("legacy remote uses scope manifests without a release", async () => {
   const urls: string[] = [];
   globalThis.fetch = async (input) => {
     const url = String(input);

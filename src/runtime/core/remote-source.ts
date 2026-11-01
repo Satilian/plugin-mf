@@ -1,11 +1,13 @@
-import { createElement, Fragment, lazy } from "react";
-import { ManifestLoader, type RemoteManifest, type RemoteInfo } from "./manifest-loader.ts";
-import { loadReleaseManifest, type ResolvedRelease } from "./release-manifest.ts";
-import type { ModuleLoadContext } from "./asset-path.ts";
+import { ManifestLoader } from "./manifest-loader.ts";
+import type { RemoteManifest, RemoteInfo } from "../../protocol/remote-manifest.ts";
+import { loadReleaseManifest } from "../../transport/release-loader.ts";
+import type { ResolvedRelease } from "../../protocol/release-manifest.ts";
+import type { ModuleLoader, RemoteScope } from "../../protocol/module.ts";
 
-export class Remote {
+type RemoteExport = { value: unknown; stylesheets: string[] };
+
+export class RemoteSource {
   #manifestLoader = new ManifestLoader();
-  #lazyComponents = new Map<string, ReturnType<typeof lazy>>();
   manifest?: RemoteManifest;
   baseUrl = "";
   releaseId?: string;
@@ -14,8 +16,8 @@ export class Remote {
 
   constructor(
     private url: string,
-    private moduleLoader: { load: (url: string, context?: ModuleLoadContext) => Promise<any> },
-    private scope: string,
+    private moduleLoader: ModuleLoader,
+    private scope: RemoteScope,
     private getPinnedRelease?: () => ResolvedRelease | null | undefined,
   ) {}
 
@@ -61,7 +63,7 @@ export class Remote {
     this.baseUrl = __baseUrl;
   }
 
-  async component(name: string) {
+  async loadExport(name: string): Promise<RemoteExport> {
     if (!this.manifest) await this.#load();
 
     const path = this.manifest?.[name];
@@ -90,30 +92,6 @@ export class Remote {
       cssBaseUrl = client.__baseUrl;
     }
 
-    if (!css.length) return component;
-    const stylesheets = [...new Set(css.map((asset) => new URL(asset, cssBaseUrl).href))];
-    return function StyledRemote(props: any) {
-      return createElement(Fragment, null,
-        ...stylesheets.map((href) => createElement("link", {
-          key: href, rel: "stylesheet", href, precedence: "mf",
-        })),
-        createElement(component, props),
-      );
-    };
-  }
-
-  lazyComponent(name: string): ReturnType<typeof lazy> {
-    const cached = this.#lazyComponents.get(name);
-    if (cached) return cached;
-
-    const component = lazy(async () => {
-      const component = await this.component(name);
-
-      return {
-        default: component,
-      };
-    });
-    this.#lazyComponents.set(name, component);
-    return component;
+    return { value: component, stylesheets: [...new Set(css.map((asset) => new URL(asset, cssBaseUrl).href))] };
   }
 }

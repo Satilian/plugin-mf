@@ -1,4 +1,4 @@
-import { parseReleaseManifest, type ResolvedRelease } from "./release-manifest";
+import { parseReleaseManifest, type ResolvedRelease } from "./release-manifest.ts";
 
 export const MF_RELEASES_ELEMENT_ID = "mf-releases";
 

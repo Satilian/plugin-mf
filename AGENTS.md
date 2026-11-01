@@ -1,17 +1,41 @@
-# AGENTS.md
+# plugin-mf
 
-You are an expert in JavaScript, Rspack, Rsbuild, Rslib, and library development. You write maintainable, performant, and accessible code.
+## Работа с проектом
 
-## Commands
+- Общаться на русском, кратко и технически. Объяснять неочевидные архитектурные решения.
+- Использовать pnpm. Сначала изучать потребителей и существующие изменения; не перезаписывать чужую работу.
+- Следовать KISS, DRY и SOLID: отдельная ответственность, явные зависимости, общие функции только при одинаковых инвариантах. Не вводить базовые классы и универсальные абстракции без реальной потребности.
+- Строгий TypeScript; внешние данные — unknown с проверкой. Не использовать any, подавления ошибок и необоснованные assertions.
+- Для публичных API задавать явные типы. При изменении контракта обновлять все примеры и раздел миграции README.
+- Не добавлять комментарии, пересказывающие код, и отдельные документы с дублирующими правилами.
+- Новые тесты писать только по прямому запросу пользователя. Существующие запускать; временные проверки не коммитить.
+- Не коммитить и не отправлять изменения без явного разрешения.
 
-- `npm run build` - Build the library for production
-- `npm run dev` - Turn on watch mode, watch for changes and rebuild the library
-- `npm run test` - Run tests
-- `npm run test:watch` - Run tests in watch mode
+## Границы модулей
 
-## Docs
+- Корневые index/client/server/shared — публичные фасады без бизнес-логики.
+- protocol — чистые форматы, парсеры и контракты, без I/O, React и Node API.
+- transport — общий сетевой доступ к протоколу, без платформенных адаптеров.
+- build — Rsbuild/Rspack, генерация типов и публикация; зависит от protocol и transport.
+- runtime/core — загрузка remote через ModuleLoader; без React, DOM и Node API.
+- runtime/react — компоненты, lazy и CSS; использует core.
+- runtime/client и runtime/server — платформенные адаптеры; не импортируют друг друга или build.
+- sharing — независимый реестр общих модулей.
+- Внутренние модули не импортируют публичные фасады пакета. Ограничения слоёв проверяет ESLint.
 
-- Rslib: https://rslib.rs/llms.txt
-- Rsbuild: https://rsbuild.rs/llms.txt
-- Rspack: https://rspack.rs/llms.txt
-- Rstest: https://rstest.rs/llms.txt
+## Проверки
+
+- pnpm check — TypeScript, ESLint, существующие тесты и сборка библиотеки.
+- pnpm test:watch — существующие тесты в watch-режиме.
+- pnpm start — сборка и запуск примеров в порядке subhost → hosts → shell с HTTP readiness.
+- После изменения сборки/runtime проверять затронутые примеры. Успешная сборка не подтверждает SSR и гидрацию.
+- Новые сценарии P1/P2 из IMPROVEMENT_PLAN.md не включать в рефакторинг без запроса.
+
+## Skills и документация
+
+- mf-plugin-development — lifecycle, генерация кода и сборка релиза.
+- mf-runtime-maintenance — SSR, загрузка и дисковый кеш.
+- mf-change-verification — выбор и выполнение проверок изменения.
+- Сверять API с установленной версией: https://rsbuild.rs/llms.txt, https://rspack.rs/llms.txt, https://rslib.rs/llms.txt.
+- Context7 использовать для адресных запросов документации; при расхождениях проверять первоисточник и локальные типы.
+- Playwright MCP использовать для проверки браузерных примеров. MCP не заменяет локальные проверки.

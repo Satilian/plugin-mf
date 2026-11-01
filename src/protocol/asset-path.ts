@@ -10,10 +10,3 @@ export function validateAssetPath(value: string): void {
     throw new Error(`[plugin-mf] Invalid asset path: ${value}`);
   }
 }
-
-export type ModuleLoadContext = {
-  provider: string;
-  releaseId?: string;
-  baseUrl: string;
-  files: string[];
-};

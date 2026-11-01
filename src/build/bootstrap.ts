@@ -1,5 +1,5 @@
-import { Rspack } from "@rsbuild/core";
-import { PluginMFConfig } from ".";
+import type { Rspack } from "@rsbuild/core";
+import type { PluginMFConfig } from "./config.ts";
 
 type Config = {
   name?: string;

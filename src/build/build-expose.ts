@@ -1,8 +1,8 @@
-import { rspack, Rspack } from "@rsbuild/core";
+import { rspack, type Rspack } from "@rsbuild/core";
 import { writeFile } from "node:fs/promises";
 import path from "node:path";
-import { formatStats } from "./format-stats";
-import type { RemoteManifest } from "./manifest-loader";
+import { formatStats } from "./format-stats.ts";
+import type { RemoteManifest } from "../protocol/remote-manifest.ts";
 
 export type BuildExposeProps = {
   releaseId: string;
@@ -112,7 +112,7 @@ export async function buildExpose({ entry, externals, releaseId, config: baseCon
       console.log(
         await formatStats({
           stats,
-          outputPath: outputPath,
+          outputPath,
           environment: config.name || "",
         }),
       );

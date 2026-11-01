@@ -44,18 +44,23 @@
     "build:host": "pnpm --filter ./example/host* run build",
     "build:subhost": "pnpm --filter ./example/sub-host* run build",
     "dev": "rslib --watch",
-    "test": "node --experimental-transform-types --test src/*.test.ts",
-    "test:watch": "rstest --watch",
+    "test": "node --experimental-transform-types --test \"src/**/*.test.ts\"",
+    "test:watch": "node --experimental-transform-types --test --watch \"src/**/*.test.ts\"",
     "start:subhost": "pnpm build:subhost && pnpm --filter ./example/sub-host* --parallel --stream run server",
     "start:host": "pnpm --filter shell exec wait-on --timeout 120000 --log http-get://localhost:4001/mf/manifest.json && pnpm build:host && pnpm --filter ./example/host* --parallel --stream run server",
     "start:shell": "pnpm --filter shell exec wait-on --timeout 120000 --log http-get://localhost:4001/mf/manifest.json http-get://localhost:3001/mf/manifest.json http-get://localhost:3002/mf/manifest.json && pnpm build:shell && pnpm --filter ./example/shell* --parallel --stream run server",
-    "start": "pnpm build && concurrently --kill-others --names subhost,host,shell \"pnpm start:subhost\" \"pnpm start:host\" \"pnpm start:shell\""
+    "start": "pnpm build && concurrently --kill-others --names subhost,host,shell \"pnpm start:subhost\" \"pnpm start:host\" \"pnpm start:shell\"",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint src --max-warnings 0",
+    "check": "pnpm typecheck && pnpm lint && pnpm test && pnpm build"
   },
   "devDependencies": {
     "@rsbuild/core": "^2.2.1",
     "@rslib/core": "^0.23.2",
     "@types/node": "^24.13.2",
     "concurrently": "^10.0.6",
-    "typescript": "^6.0.3"
+    "eslint": "^10.13.0",
+    "typescript": "^6.0.3",
+    "typescript-eslint": "^8.72.1"
   }
 }

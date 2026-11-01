@@ -121,3 +121,58 @@ directories are recovered on the next operation. If a process dies during lock
 recovery itself, an explicit recovery error is raised: stop all cache users before
 removing `.recovery`. Use a dedicated directory on a local filesystem shared by
 workers on the same machine; PID leases do not coordinate different hosts.
+
+## Архитектура и проверка изменений
+
+Пакет сохраняет четыре публичных входа: основной Rsbuild-плагин, client, server и shared.
+Входные файлы служат фасадами; внутренние модули не являются публичным API.
+
+| Модуль | Ответственность |
+| --- | --- |
+| protocol | Чистые контракты и проверка манифестов, путей и SSR-данных |
+| transport | Общая сетевая загрузка манифеста релиза |
+| build | Hooks Rsbuild, конфигурация Rspack, артефакты и типы |
+| runtime/core | Выбор релиза и загрузка экспорта через ModuleLoader |
+| runtime/react | Типизированные компоненты, lazy и CSS |
+| runtime/client | Браузерный загрузчик и чтение SSR-релизов |
+| runtime/server | Контекст SSR, ESM import и файловый кеш |
+| sharing | Реестр общих зависимостей |
+
+Сборка и runtime используют protocol и transport. Общий runtime не зависит от React
+и платформенных адаптеров. Серверный Loader управляет памятью и импортом, DiskCache —
+файлами; блокировки и очистка вынесены в отдельные модули. Эти границы проверяет ESLint.
+
+Команда pnpm check запускает строгую проверку TypeScript, ESLint, существующие тесты
+и сборку библиотеки. pnpm start дополнительно собирает и запускает все примеры
+с ожиданием HTTP-манифестов зависимостей. Проверка SSR и гидрации выполняется отдельно.
+
+## Миграция типизации
+
+Имена функций, конфигурация плагина и форматы манифестов сохранены.
+getShared возвращает unknown вместо any: перед использованием значение нужно
+сузить до ожидаемого контракта. Методы component и lazyComponent принимают generic
+тип props; createRemoteComponent также передаёт его в lazy-компонент.
+
+При недоступности деклараций синхронизация по-прежнему выдаёт предупреждение,
+но fallback-модуль имеет тип unknown. Использование такого импорта как React-компонента
+теперь требует восстановления типов provider; прежний fallback any скрывал потерю контракта.
+Режимы strict/best-effort/off остаются отдельной задачей IMPROVEMENT_PLAN.md.
+
+## Проектные инструменты Codex
+
+Правила находятся в AGENTS.md, три специализированных skill — в .agents/skills.
+Проектная .codex/config.toml подключает Context7 для документации и Playwright MCP
+для проверки примеров в изолированном headless Chrome. Playwright закреплён на версии
+0.0.83; для запуска нужны Node.js с npx и установленный Google Chrome.
+Глобальные настройки Codex не меняются. Для загрузки проектного конфига проект должен
+быть доверенным; новые tools появляются после обновления MCP-подключений или новой сессии.
+
+Context7 настроен на https://mcp.context7.com/mcp без ключа. Если для вашего доступа
+потребуется авторизация или повышенный лимит, передавайте ключ через локальное окружение
+и настройки заголовков клиента; не добавляйте секреты в репозиторий. Документацию сверяйте
+с установленной версией и первоисточниками Rsbuild/Rspack/Rslib.
+
+Источники настройки: [Codex](https://learn.chatgpt.com/docs/config-file/config-reference),
+[skills](https://learn.chatgpt.com/docs/build-skills),
+[Context7](https://github.com/upstash/context7),
+[Playwright MCP](https://github.com/microsoft/playwright-mcp).

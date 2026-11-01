@@ -1,10 +1,11 @@
 import { mkdir, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
-import type { RemoteTypeManifest } from "./build-types";
-import { loadReleaseManifest } from "./release-manifest";
+import { parseTypeManifest } from "../protocol/type-manifest.ts";
+import { loadReleaseManifest } from "../transport/release-loader.ts";
 
 type SyncRemoteTypesProps = {
   remotes: Record<string, string>;
+  rootPath: string;
 };
 
 type TypeModule = {
@@ -13,19 +14,18 @@ type TypeModule = {
   export: string;
 };
 
-const TYPES_ROOT = path.join(process.cwd(), "node_modules", ".cache", "mf-types");
-const MODULES_FILE = path.join(process.cwd(), "src", "mf-types.d.ts");
-
-export async function syncTypes({ remotes }: SyncRemoteTypesProps) {
-  await rm(TYPES_ROOT, { recursive: true, force: true });
-  await mkdir(TYPES_ROOT, { recursive: true });
+export async function syncTypes({ remotes, rootPath }: SyncRemoteTypesProps): Promise<void> {
+  const typesRoot = path.join(rootPath, "node_modules", ".cache", "mf-types");
+  const modulesFile = path.join(rootPath, "src", "mf-types.d.ts");
+  await rm(typesRoot, { recursive: true, force: true });
+  await mkdir(typesRoot, { recursive: true });
 
   const modules: TypeModule[] = [];
   const fallbacks: string[] = [];
 
   for (const [name, url] of Object.entries(remotes)) {
     try {
-      modules.push(...(await downloadRemoteTypes(name, url)));
+      modules.push(...(await downloadRemoteTypes(name, url, typesRoot)));
     } catch (error) {
       console.warn(`[plugin-mf] Unable to load types for remote "${name}": ${message(error)}`);
       fallbacks.push(name);
@@ -33,10 +33,10 @@ export async function syncTypes({ remotes }: SyncRemoteTypesProps) {
   }
 
   const source = [...modules.map(createModuleDeclaration), ...fallbacks.map(createFallbackDeclaration), ""].join("\n");
-  await writeFile(MODULES_FILE, source, "utf8");
+  await writeFile(modulesFile, source, "utf8");
 }
 
-async function downloadRemoteTypes(name: string, url: string): Promise<TypeModule[]> {
+async function downloadRemoteTypes(name: string, url: string, typesRoot: string): Promise<TypeModule[]> {
   const remoteBaseUrl = `${url.replace(/\/$/, "")}/`;
   const release = await loadReleaseManifest(new URL("manifest.json", remoteBaseUrl).href);
   const manifestUrl = release
@@ -47,9 +47,9 @@ async function downloadRemoteTypes(name: string, url: string): Promise<TypeModul
     throw new Error(`${response.status} ${response.statusText}`);
   }
 
-  const manifest = validateManifest(await response.json());
+  const manifest = parseTypeManifest(await response.json());
   const baseUrl = new URL(".", response.url);
-  const remoteRoot = path.join(TYPES_ROOT, name);
+  const remoteRoot = path.join(typesRoot, name);
 
   await Promise.all(
     manifest.files.map(async (filePath) => {
@@ -71,36 +71,6 @@ async function downloadRemoteTypes(name: string, url: string): Promise<TypeModul
   }));
 }
 
-function validateManifest(value: unknown): RemoteTypeManifest {
-  if (!value || typeof value !== "object") throw new Error("Invalid types manifest");
-
-  const manifest = value as Partial<RemoteTypeManifest>;
-  if (manifest.version !== 1 || !Array.isArray(manifest.files) || !manifest.exposes) {
-    throw new Error("Invalid types manifest");
-  }
-
-  for (const filePath of manifest.files) validatePath(filePath);
-
-  for (const [name, info] of Object.entries(manifest.exposes)) {
-    if (!name || !info || typeof info.path !== "string" || typeof info.export !== "string") {
-      throw new Error("Invalid exposed type in manifest");
-    }
-
-    validatePath(info.path);
-    if (!manifest.files.includes(info.path)) {
-      throw new Error(`Missing declaration "${info.path}" for exposed module "${name}"`);
-    }
-  }
-
-  return manifest as RemoteTypeManifest;
-}
-
-function validatePath(filePath: string) {
-  if (!filePath.endsWith(".d.ts") || path.posix.isAbsolute(filePath) || filePath.split("/").includes("..")) {
-    throw new Error(`Invalid declaration path "${filePath}"`);
-  }
-}
-
 function createModuleDeclaration(module: TypeModule) {
   return [
     `declare module ${JSON.stringify(module.name)} {`,
@@ -113,7 +83,7 @@ function createModuleDeclaration(module: TypeModule) {
 function createFallbackDeclaration(name: string) {
   return [
     `declare module ${JSON.stringify(`${name}/*`)} {`,
-    "  const remote: any;",
+    "  const remote: unknown;",
     "  export default remote;",
     "}",
   ].join("\n");

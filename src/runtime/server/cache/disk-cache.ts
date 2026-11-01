@@ -6,6 +6,8 @@ import { inside, regularFile } from "./paths.ts";
 import { entrySize, isPinned, prune } from "./prune.ts";
 import type { CacheEntry } from "./entry.ts";
 import type { ServerCacheOptions, CachePruneResult } from "./config.ts";
+import type { LoadContext } from "../../../protocol/load-error.ts";
+import { fetchResource } from "../../../transport/loading.ts";
 
 const DEFAULT_MAX_BYTES = 512 * 1024 * 1024;
 
@@ -58,15 +60,15 @@ export class DiskCache {
     return this.#root;
   }
 
-  async #download(root: string, entry: CacheEntry, destination: string): Promise<void> {
+  async #download(root: string, entry: CacheEntry, destination: string, context: LoadContext, deadlineSignal: AbortSignal): Promise<void> {
     const staging = await mkdtemp(path.join(root, ".download-"));
     try {
       let downloadedBytes = 0;
       for (let offset = 0; offset < entry.files.length; offset += 8) {
+        deadlineSignal.throwIfAborted();
         const results = await Promise.allSettled(entry.files.slice(offset, offset + 8).map(async (file) => {
-          const response = await fetch(file.url);
-          if (!response.ok) throw new Error(`[plugin-mf] Failed to load server asset: ${response.status} ${response.statusText}`);
-          const buffer = Buffer.from(await response.arrayBuffer());
+          const buffer = Buffer.from(await fetchResource(file.url, context, (response) => response.arrayBuffer(), deadlineSignal));
+          deadlineSignal.throwIfAborted();
           downloadedBytes += buffer.byteLength;
           if (downloadedBytes > this.#maxBytes) throw new Error("[plugin-mf] Server release exceeds cache maxBytes");
           const target = inside(staging, file.path);
@@ -86,6 +88,7 @@ export class DiskCache {
       }
       await writeFile(path.join(staging, "package.json"), '{"type":"module"}', "utf8");
       await writeFile(path.join(staging, ".ready.json"), JSON.stringify(entry.files), "utf8");
+      deadlineSignal.throwIfAborted();
       const size = await entrySize(staging);
       const pruned = await prune(root, Math.max(0, this.#maxBytes - size), undefined, staging);
       if (size + pruned.bytes > this.#maxBytes) {
@@ -97,10 +100,11 @@ export class DiskCache {
     }
   }
 
-  async resolve(entry: CacheEntry): Promise<string> {
+  async resolve(entry: CacheEntry, context: LoadContext, deadlineSignal: AbortSignal): Promise<string> {
     const root = await this.#getRoot();
     const directory = inside(path.join(root, "entries"), entry.key);
     await withCacheLock(root, this.#lockTimeoutMs, async () => {
+      deadlineSignal.throwIfAborted();
       let ready = false;
       try {
         if ((await lstat(directory)).isSymbolicLink()) throw new Error("[plugin-mf] Cache entry must not be a symbolic link");
@@ -115,7 +119,7 @@ export class DiskCache {
       if (!ready) {
         if (await isPinned(directory)) throw new Error("[plugin-mf] Active server cache entry is incomplete");
         await rm(directory, { recursive: true, force: true });
-        await this.#download(root, entry, directory);
+        await this.#download(root, entry, directory, context, deadlineSignal);
       }
       const pruned = await prune(root, this.#maxBytes, directory);
       if (pruned.overBudgetBytes) throw new Error("[plugin-mf] Server cache limit reached by active ESM releases; raise maxBytes or restart workers");
@@ -129,7 +133,7 @@ export class DiskCache {
         if (!hasCode(error, "EEXIST")) throw error;
         await regularFile(pins, String(process.pid));
       }
-    });
+    }, deadlineSignal);
     return inside(directory, entry.entryPath);
   }
 

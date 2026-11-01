@@ -33,6 +33,14 @@ export default defineConfig(() => {
     plugins: [
       pluginReact(),
       pluginMF({
+        loading: {
+          manifestTimeoutMs: 2_000,
+          moduleTimeoutMs: 6_000,
+          typesTimeoutMs: 10_000,
+          retries: 2,
+          retryDelayMs: 100,
+          circuitBreaker: { failureThreshold: 3, cooldownMs: 5_000 },
+        },
         remotes: {
           host1: "http://localhost:3001/mf",
           host2: "http://localhost:3002/mf",

@@ -5,10 +5,12 @@ import { resolver } from "./resolver.ts";
 import { modifyEntry } from "./bootstrap.ts";
 import { syncTypes } from "./sync-types.ts";
 import type { PluginMFConfig } from "./config.ts";
+import { configureLoading } from "../transport/loading.ts";
 
 export const pluginMF = (mfConfig: PluginMFConfig = {}): RsbuildPlugin => ({
   name: "plugin-mf",
   setup(api) {
+    if (mfConfig.loading) configureLoading(mfConfig.loading);
     let nodeConfig: Rspack.Configuration | undefined;
     let webConfig: Rspack.Configuration | undefined;
 
@@ -62,6 +64,7 @@ export const pluginMF = (mfConfig: PluginMFConfig = {}): RsbuildPlugin => ({
         config.plugins.push(
           new rspack.DefinePlugin({
             __MF_REMOTES__: JSON.stringify(mfConfig.remotes),
+            __MF_LOADING__: JSON.stringify(mfConfig.loading ?? {}),
           }),
         );
 

@@ -64,7 +64,7 @@ async function renameLock(source: string, target: string, timeoutMs: number): Pr
   }
 }
 
-export async function withCacheLock<T>(root: string, timeoutMs: number, callback: () => Promise<T>): Promise<T> {
+export async function withCacheLock<T>(root: string, timeoutMs: number, callback: () => Promise<T>, deadlineSignal?: AbortSignal): Promise<T> {
   const staging = await mkdtemp(path.join(root, ".lock-owner-"));
   const target = path.join(root, ".lock");
   const recovery = path.join(root, ".recovery");
@@ -73,6 +73,7 @@ export async function withCacheLock<T>(root: string, timeoutMs: number, callback
   try {
     await writeFile(path.join(staging, "owner.json"), JSON.stringify({ pid: process.pid }), "utf8");
     while (!acquired) {
+      deadlineSignal?.throwIfAborted();
       let recovering = false;
       try {
         await readFile(path.join(recovery, "owner.json"));

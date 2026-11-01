@@ -1,20 +1,21 @@
 import { Link } from "@satilian/router";
 import Div from "host1/Div";
 import Section from "host2/Section";
-import { Suspense } from "react";
+import { RemoteBoundary } from "../remote-boundary";
 
 export const AboutPage = () => {
   return (
     <div>
       <h1>About Page</h1>
 
-      <Suspense>
+      <Link to="/">Home Page</Link>
+      <RemoteBoundary name="host2/Section">
         <Section>
-          <Div>This is the about page.</Div>
-
-          <Link to="/">Home Page</Link>
+          <RemoteBoundary name="host1/Div">
+            <Div>This is the about page.</Div>
+          </RemoteBoundary>
         </Section>
-      </Suspense>
+      </RemoteBoundary>
     </div>
   );
 };

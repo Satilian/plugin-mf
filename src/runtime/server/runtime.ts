@@ -3,6 +3,8 @@ import { AsyncLocalStorage } from "node:async_hooks";
 import { createElement, type ComponentType } from "react";
 import { MF_RELEASES_ELEMENT_ID, type SSRReleases } from "../../protocol/ssr-releases.ts";
 import { Loader, type ServerCacheOptions } from "./loader.ts";
+import { configureLoading } from "../../transport/loading.ts";
+import { RemoteLoadError, type LoadingOptions } from "../../protocol/load-error.ts";
 
 export { Loader } from "./loader.ts";
 export type { ServerCacheOptions, CachePruneResult } from "./loader.ts";
@@ -14,6 +16,9 @@ const requestGlobal = globalThis as typeof globalThis & {
   [requestContextKey]?: AsyncLocalStorage<Map<string, Remote>>;
 };
 const requestContext = requestGlobal[requestContextKey] ??= new AsyncLocalStorage<Map<string, Remote>>();
+const signalKey = Symbol.for("plugin-mf.ssr-request-signal");
+const signalGlobal = globalThis as typeof globalThis & { [signalKey]?: AsyncLocalStorage<AbortSignal | undefined> };
+const requestSignal = signalGlobal[signalKey] ??= new AsyncLocalStorage<AbortSignal | undefined>();
 const runtimeKey = Symbol.for("plugin-mf.server-runtime");
 const runtimeGlobal = globalThis as typeof globalThis & {
   [runtimeKey]?: { options?: ServerCacheOptions; loader?: Loader };
@@ -29,8 +34,8 @@ function getLoader(): Loader {
   return runtime.loader ??= new Loader(runtime.options);
 }
 
-export function runWithMFRequest<T>(callback: () => T): T {
-  return requestContext.run(new Map(), callback);
+export function runWithMFRequest<T>(callback: () => T, options: { signal?: AbortSignal } = {}): T {
+  return requestSignal.run(options.signal, () => requestContext.run(new Map(), callback));
 }
 
 export function getMFReleases(): SSRReleases {
@@ -51,6 +56,8 @@ export function serializeMFReleases(): string {
 }
 
 declare const __MF_REMOTES__: Record<string, string> | undefined;
+declare const __MF_LOADING__: LoadingOptions | undefined;
+if (typeof __MF_LOADING__ !== "undefined") configureLoading(__MF_LOADING__);
 
 function ensureInit() {
   if (remotes.size > 0) return;
@@ -65,13 +72,13 @@ export function getRemote(name: string): Remote {
   if (requestRemotes) {
     const url = (__MF_REMOTES__ || {})[name];
     if (!url) {
-      throw new Error(`[plugin-mf] Remote "${name}" not found. Available: ${Object.keys(__MF_REMOTES__ || {}).join(", ") || "none"}`);
+      throw new RemoteLoadError({ remote: name, stage: "module" }, "LOAD_FAILED", `Remote not found. Available: ${Object.keys(__MF_REMOTES__ || {}).join(", ") || "none"}`);
     }
 
     const key = url.replace(/\/$/, "");
     let remote = requestRemotes.get(key);
     if (!remote) {
-      remote = new Remote(url, getLoader(), "server");
+      remote = new Remote(url, getLoader(), "server", undefined, requestSignal.getStore());
       requestRemotes.set(key, remote);
     }
     return remote;
@@ -81,9 +88,7 @@ export function getRemote(name: string): Remote {
 
   const remote = remotes.get(name);
   if (!remote) {
-    throw new Error(
-      `[plugin-mf] Remote "${name}" not found. Available: ${[...remotes.keys()].join(", ") || "none"}`,
-    );
+    throw new RemoteLoadError({ remote: name, stage: "module" }, "LOAD_FAILED", `Remote not found. Available: ${[...remotes.keys()].join(", ") || "none"}`);
   }
 
   return remote;

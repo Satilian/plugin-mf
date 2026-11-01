@@ -1,67 +1,84 @@
 import type { Express, Response, Request } from "express";
 import express from "express";
-import fs from "fs";
-import { resolve } from "path";
+import fs from "node:fs";
+import { resolve } from "node:path";
 import { renderToPipeableStream } from "react-dom/server.node";
-import { PassThrough } from "stream";
+import { PassThrough } from "node:stream";
 import App from "./App";
 import { runWithMFRequest, serializeMFReleases } from "plugin-mf/server";
 
 const app: Express = express();
-const port: number = 3000;
+const port = 3000;
+const SSR_DEADLINE_MS = 8_000;
 
-export function isBot(userAgent: string | undefined) {
+export function isBot(userAgent: string | undefined): boolean {
   return !!userAgent && /bot|crawl|spider|slurp|facebook|telegram/i.test(userAgent);
 }
 
 const splitPattern = '<div id="root">';
 const html = fs.readFileSync(resolve("dist/index.html"), "utf8");
 const [head, tail] = html.split(splitPattern);
-
 app.use(express.static("dist", { index: false }));
 
-app.get("{*splat}", (req: Request, res: Response) => runWithMFRequest(() => {
-  res.statusCode = 200;
-  res.setHeader("Content-type", "text/html");
-
-  const write = (chunk: unknown) => {
-    res.write(chunk);
-  };
-
-  const bot = isBot(req.get("user-agent"));
-
-  res.write(head + splitPattern);
-
-  const stream = renderToPipeableStream(<App pathname={req.path} query={req.query} />, {
-    [bot ? "onAllReady" : "onShellReady"]() {
-      getBody(stream.pipe(new PassThrough()), write).then(() => {
-        res.write(tail.replace("</body>", `${serializeMFReleases()}</body>`));
-        res.end();
-      });
-    },
-    onShellError: (error: any) => {
-      console.error("❌ [renderStream] \r\n", error);
-      res.send(error.message);
-    },
-    onError: (error: any) => {
-      console.error("❌ [renderStream] \r\n", error);
-    },
-  });
-}));
-
-app.listen(port, (): void => {
-  console.log(`Example app listening on port ${port}`);
+app.get("{*splat}", (req: Request, res: Response) => {
+  const controller = new AbortController();
+  runWithMFRequest(() => {
+    const body = new PassThrough();
+    let started = false;
+    let deadlineExceeded = false;
+    const cleanup = () => {
+      clearTimeout(deadline);
+      res.off("close", disconnect);
+    };
+    const disconnect = () => {
+      if (res.writableFinished) return;
+      controller.abort(new Error("SSR client disconnected"));
+      stream.abort(controller.signal.reason);
+      body.destroy();
+      cleanup();
+    };
+    const start = () => {
+      if (started || res.destroyed || res.writableEnded) return;
+      started = true;
+      res.statusCode = deadlineExceeded ? 503 : 200;
+      res.setHeader("Content-type", "text/html; charset=utf-8");
+      res.write(head + splitPattern);
+      body.pipe(res, { end: false });
+      stream.pipe(body);
+    };
+    body.on("end", () => {
+      cleanup();
+      if (!res.destroyed) res.end(tail.replace("</body>", serializeMFReleases() + "</body>"));
+    });
+    body.on("error", (error: Error) => {
+      console.error("[SSR stream]", error);
+      cleanup();
+      controller.abort(error);
+      stream.abort(error);
+      res.destroy();
+    });
+    const deadline = setTimeout(() => {
+      deadlineExceeded = true;
+      controller.abort(new Error("SSR deadline exceeded"));
+      stream.abort(controller.signal.reason);
+      start();
+    }, SSR_DEADLINE_MS);
+    const stream = renderToPipeableStream(<App pathname={req.path} query={req.query} />, {
+      [isBot(req.get("user-agent")) ? "onAllReady" : "onShellReady"]() {
+        if (!deadlineExceeded) start();
+      },
+      onShellError(error: unknown) {
+        console.error("[SSR shell]", error);
+        cleanup();
+        controller.abort(error);
+        res.status(503).send("Страница временно недоступна");
+      },
+      onError(error: unknown) {
+        console.error("[SSR remote]", error);
+      },
+    });
+    res.once("close", disconnect);
+  }, { signal: controller.signal });
 });
 
-const getBody = (bodyStream: PassThrough, write: (chunk: unknown) => void) => {
-  const chunks: Buffer[] = [];
-
-  return new Promise<string>((resolve) => {
-    bodyStream.on("data", (chunk) => {
-      chunks.push(Buffer.from(chunk));
-      write(chunk);
-    });
-
-    bodyStream.on("end", () => resolve(Buffer.concat(chunks).toString("utf-8")));
-  });
-};
+app.listen(port, () => console.log("Example app listening on port " + port));

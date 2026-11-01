@@ -122,6 +122,50 @@ recovery itself, an explicit recovery error is raised: stop all cache users befo
 removing `.recovery`. Use a dedicated directory on a local filesystem shared by
 workers on the same machine; PID leases do not coordinate different hosts.
 
+## Ограничение загрузки и восстановление
+
+`pluginMF({ loading: { manifestTimeoutMs: 5000, moduleTimeoutMs: 15000,
+typesTimeoutMs: 15000, retries: 2, retryDelayMs: 100,
+circuitBreaker: { failureThreshold: 3, cooldownMs: 10000 } } })` задаёт политику
+сборки и runtime. Все поля необязательны; в примере показаны значения по умолчанию.
+Вручную созданные загрузчики настраиваются через `configureLoading` из
+`plugin-mf/client` или `plugin-mf/server` до начала загрузок. Настройка общая для
+одного JS realm, включая вложенные remote bundles; consumer задаёт общую политику,
+providers не должны переопределять её своими значениями `loading`.
+
+`manifestTimeoutMs` ограничивает один манифест вместе с чтением тела и повторами.
+`moduleTimeoutMs` ограничивает всю загрузку expose, включая выбор релиза, манифесты,
+модуль и серверные assets. `typesTimeoutMs` — весь набор типов одного provider.
+Повторы используют экспоненциальную задержку в пределах исходного бюджета времени:
+сетевые ошибки и HTTP 408/429/500/502/503/504, максимум `retries` дополнительных
+попыток (0–10). Ошибки формата, остальные HTTP-статусы и ошибки исполнения не повторяются.
+Только 404 указателя релиза включает legacy layout.
+
+Ошибки `RemoteLoadError` содержат `remote` (URL provider), `releaseId` (если выбран),
+`stage`, `code`, необязательный HTTP `status` и `cause`. Этапы: `release-manifest`,
+`manifest`, `module`, `types`; коды: `LOAD_FAILED`, `HTTP_ERROR`, `TIMEOUT`,
+`ABORTED`, `CIRCUIT_OPEN`. Circuit breaker учитывает неуспешные загрузки expose
+или типов по provider, исключает отмену SSR, после порога отказывает без сетевых
+запросов и после cooldown разрешает одну пробную загрузку. Успех закрывает circuit.
+
+Неуспешный `React.lazy` сохраняет ошибку до явного `getRemote(name).retry(expose)`.
+После этого нужно сбросить локальный Error Boundary; сгенерированные remote imports
+и `createRemoteComponent` получат новый lazy при рендере. Для ручного использования
+`lazyComponent` также заново получите компонент после `retry`. Повторный `retry`
+не сбрасывает уже начатую попытку. Успешные модули и выбранный релиз сохраняются.
+Браузерная повторная загрузка использует `mf_retry` в query того же release URL,
+чтобы обойти кеш неуспешного import; CDN должен принимать этот query.
+
+Пример `example/shell/src/remote-boundary.tsx` сочетает локальный Error Boundary,
+кнопку повторной загрузки и Suspense fallback. На сервере ошибки внутри Suspense
+оставляют fallback для клиентского восстановления. В `example/shell/src/server.tsx`
+SSR ограничен 8 секундами и прерывается при отключении клиента:
+`runWithMFRequest(callback, { signal })` отменяет ожидание remote и запросы манифестов,
+а consumer также вызывает `stream.abort()`. Общая дедуплицированная серверная загрузка
+имеет независимый deadline: отмена одного запроса не ломает другие SSR-запросы.
+Нативный import и уже исполняемый JavaScript нельзя остановить AbortSignal;
+таймаут ограничивает ожидание, но не прерывает исполнение модуля и не очищает ESM-кеш.
+
 ## Архитектура и проверка изменений
 
 Пакет сохраняет четыре публичных входа: основной Rsbuild-плагин, client, server и shared.
@@ -147,6 +191,11 @@ workers on the same machine; PID leases do not coordinate different hosts.
 с ожиданием HTTP-манифестов зависимостей. Проверка SSR и гидрации выполняется отдельно.
 
 ## Миграция типизации
+
+Параметр `loading` и второй аргумент `runWithMFRequest` необязательны. Существующая
+конфигурация работает с конечными таймаутами и ограниченными повторами по умолчанию.
+Для восстановления ручного lazy после ошибки вызовите `remote.retry(expose)`,
+заново получите `lazyComponent(expose)` и сбросьте Error Boundary.
 
 Имена функций, конфигурация плагина и форматы манифестов сохранены.
 getShared возвращает unknown вместо any: перед использованием значение нужно

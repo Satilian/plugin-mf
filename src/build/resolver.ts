@@ -17,12 +17,9 @@ export const resolver = (
   const expose = rest.join("/") || "default";
   const scope = env === "node" ? "server" : "client";
 
-  const code = scope === "server" ? `
-    import { createRemoteComponent } from "plugin-mf/server";
+  const code = `
+    import { createRemoteComponent } from "plugin-mf/${scope}";
     export default createRemoteComponent(${JSON.stringify(maybeRemote)}, ${JSON.stringify(expose)});
-  ` : `
-    import { getRemote} from "plugin-mf/${scope}";
-    export default getRemote(${JSON.stringify(maybeRemote)}).lazyComponent(${JSON.stringify(expose)});
   `;
 
   return `data:text/javascript,${encodeURIComponent(code)}`;

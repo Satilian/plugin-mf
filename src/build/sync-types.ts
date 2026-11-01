@@ -2,6 +2,8 @@ import { mkdir, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { parseTypeManifest } from "../protocol/type-manifest.ts";
 import { loadReleaseManifest } from "../transport/release-loader.ts";
+import { fetchResource, loadingPolicy, withDeadline, withProvider } from "../transport/loading.ts";
+import type { LoadContext } from "../protocol/load-error.ts";
 
 type SyncRemoteTypesProps = {
   remotes: Record<string, string>;
@@ -25,7 +27,9 @@ export async function syncTypes({ remotes, rootPath }: SyncRemoteTypesProps): Pr
 
   for (const [name, url] of Object.entries(remotes)) {
     try {
-      modules.push(...(await downloadRemoteTypes(name, url, typesRoot)));
+      const context: LoadContext = { remote: url.replace(/\/$/, ""), stage: "types" };
+      modules.push(...(await withProvider(context, () => withDeadline(context, loadingPolicy().typesTimeoutMs,
+        (signal) => downloadRemoteTypes(name, url, typesRoot, context, signal)))));
     } catch (error) {
       console.warn(`[plugin-mf] Unable to load types for remote "${name}": ${message(error)}`);
       fallbacks.push(name);
@@ -36,33 +40,30 @@ export async function syncTypes({ remotes, rootPath }: SyncRemoteTypesProps): Pr
   await writeFile(modulesFile, source, "utf8");
 }
 
-async function downloadRemoteTypes(name: string, url: string, typesRoot: string): Promise<TypeModule[]> {
+async function downloadRemoteTypes(name: string, url: string, typesRoot: string, context: LoadContext, signal: AbortSignal): Promise<TypeModule[]> {
   const remoteBaseUrl = `${url.replace(/\/$/, "")}/`;
-  const release = await loadReleaseManifest(new URL("manifest.json", remoteBaseUrl).href);
+  const release = await loadReleaseManifest(new URL("manifest.json", remoteBaseUrl).href, { remote: context.remote, stage: "release-manifest" }, signal);
+  context.releaseId = release?.manifest.releaseId;
   const manifestUrl = release
     ? new URL(release.manifest.types, release.baseUrl).href
     : new URL("types/manifest.json", remoteBaseUrl).href;
-  const response = await fetch(manifestUrl);
-  if (!response.ok) {
-    throw new Error(`${response.status} ${response.statusText}`);
-  }
-
-  const manifest = parseTypeManifest(await response.json());
-  const baseUrl = new URL(".", response.url);
+  const { manifest, baseUrl } = await fetchResource(manifestUrl, context, async (response) => ({
+    manifest: parseTypeManifest(await response.json()), baseUrl: new URL(".", response.url),
+  }), signal);
   const remoteRoot = path.join(typesRoot, name);
 
-  await Promise.all(
+  const results = await Promise.allSettled(
     manifest.files.map(async (filePath) => {
-      const fileResponse = await fetch(new URL(filePath, baseUrl));
-      if (!fileResponse.ok) {
-        throw new Error(`Unable to load declaration "${filePath}": ${fileResponse.status} ${fileResponse.statusText}`);
-      }
+      const source = await fetchResource(new URL(filePath, baseUrl).href, context, (response) => response.text(), signal);
+      signal.throwIfAborted();
 
       const outputPath = path.join(remoteRoot, ...filePath.split("/"));
       await mkdir(path.dirname(outputPath), { recursive: true });
-      await writeFile(outputPath, await fileResponse.text(), "utf8");
+      await writeFile(outputPath, source, "utf8");
     }),
   );
+  const failure = results.find((result) => result.status === "rejected");
+  if (failure?.status === "rejected") throw failure.reason;
 
   return Object.entries(manifest.exposes).map(([expose, info]) => ({
     name: `${name}/${expose}`,

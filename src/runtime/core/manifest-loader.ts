@@ -1,12 +1,16 @@
 import { parseRemoteManifest, type RemoteInfo } from "../../protocol/remote-manifest.ts";
+import { fetchResource } from "../../transport/loading.ts";
+import type { LoadContext } from "../../protocol/load-error.ts";
 
 export class ManifestLoader {
   #cache = new Map<string, Promise<RemoteInfo>>();
 
-  async load(url: string) {
+  async load(url: string, context: LoadContext, signal?: AbortSignal): Promise<RemoteInfo> {
     const cached = this.#cache.get(url);
     if (cached) return cached;
-    const promise = this.#load(url);
+    const promise = fetchResource(url, context, async (response) => ({
+      manifest: parseRemoteManifest(await response.json()), __baseUrl: new URL(".", response.url).href,
+    }), signal);
     this.#cache.set(url, promise);
 
     try {
@@ -15,19 +19,6 @@ export class ManifestLoader {
       this.#cache.delete(url);
       throw error;
     }
-  }
-
-  async #load(url: string) {
-    const response = await fetch(url);
-
-    if (!response.ok) {
-      throw new Error(`Failed to load manifest: ${response.status} ${response.statusText}`);
-    }
-
-    const manifest = parseRemoteManifest(await response.json());
-    const result = { manifest, __baseUrl: new URL(".", response.url).href };
-
-    return result;
   }
 
 }

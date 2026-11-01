@@ -3,6 +3,7 @@ import path from "node:path";
 import { hasCode, isProcessAlive } from "./lock.ts";
 import { inside } from "./paths.ts";
 import type { CachePruneResult } from "./config.ts";
+import { emitLoadingEvent } from "../../../transport/observability.ts";
 
 export async function isPinned(directory: string): Promise<boolean> {
   const pins = path.join(directory, ".pins");
@@ -57,6 +58,7 @@ export async function prune(root: string, maxBytes: number, protectedDirectory?:
     if (bytes <= maxBytes) break;
     if (entry.pinned) continue;
     await rm(entry.directory, { recursive: true });
+    emitLoadingEvent({ remote: "cache://server", stage: "module", type: "prune", operation: "disk", bytes: entry.bytes });
     bytes -= entry.bytes;
     removedEntries++;
   }

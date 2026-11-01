@@ -4,8 +4,11 @@ import fs from "node:fs";
 import { resolve } from "node:path";
 import { renderToPipeableStream } from "react-dom/server.node";
 import { PassThrough } from "node:stream";
+import { randomUUID } from "node:crypto";
 import App from "./App";
-import { runWithMFRequest, serializeMFReleases } from "plugin-mf/server";
+import { configureObservability, runWithMFRequest, serializeMFReleases } from "plugin-mf/server";
+
+if (process.env.MF_TRACE === "1") configureObservability((event) => console.log(JSON.stringify({ source: "mf", ...event })));
 
 const app: Express = express();
 const port = 3000;
@@ -78,7 +81,7 @@ app.get("{*splat}", (req: Request, res: Response) => {
       },
     });
     res.once("close", disconnect);
-  }, { signal: controller.signal });
+  }, { signal: controller.signal, requestId: req.get("x-request-id") ?? randomUUID() });
 });
 
 app.listen(port, () => console.log("Example app listening on port " + port));

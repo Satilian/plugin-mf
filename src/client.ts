@@ -1,5 +1,7 @@
 export { Loader, getRemote, initializeMFReleases, createRemoteComponent } from "./runtime/client/runtime.ts";
 export { configureLoading } from "./transport/loading.ts";
+export { configureObservability, getLoadingMetrics } from "./transport/observability.ts";
+export type { LoadingEvent, LoadingEventHandler, LoadingMetrics } from "./protocol/observability.ts";
 export { configureNetwork } from "./transport/network-policy.ts";
 export type { NetworkOptions } from "./protocol/network-policy.ts";
 export { RemoteLoadError } from "./protocol/load-error.ts";

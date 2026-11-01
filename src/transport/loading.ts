@@ -1,5 +1,6 @@
 import { RemoteLoadError, type LoadContext, type LoadingOptions } from "../protocol/load-error.ts";
 import { assertRemoteURL } from "./network-policy.ts";
+import { emitLoadingEvent, observeLoading } from "./observability.ts";
 
 type Policy = Required<Omit<LoadingOptions, "circuitBreaker">> & {
   circuitBreaker: { failureThreshold: number; cooldownMs: number };
@@ -75,7 +76,7 @@ async function pause(ms: number, signal: AbortSignal): Promise<void> {
   });
 }
 
-export async function retryNetwork<T>(callback: (attempt: number) => Promise<T>, signal: AbortSignal, retryable: (error: unknown) => boolean = transient): Promise<T> {
+export async function retryNetwork<T>(callback: (attempt: number) => Promise<T>, signal: AbortSignal, retryable: (error: unknown) => boolean = transient, context?: LoadContext): Promise<T> {
   const policy = loadingPolicy();
   for (let attempt = 0; ; attempt++) {
     signal.throwIfAborted();
@@ -84,6 +85,7 @@ export async function retryNetwork<T>(callback: (attempt: number) => Promise<T>,
     } catch (error) {
       if (signal.aborted) throw signal.reason;
       if (attempt >= policy.retries || !retryable(error)) throw error;
+      if (context) emitLoadingEvent({ ...context, type: "retry", operation: "fetch", attempt: attempt + 1 });
       await pause(Math.min(policy.retryDelayMs * 2 ** attempt, 2_147_483_647), signal);
     }
   }
@@ -94,7 +96,7 @@ export function fetchResource<T>(url: string, context: LoadContext, read: (respo
 export async function fetchResource<T>(url: string, context: LoadContext, read: (response: Response) => Promise<T>, signal?: AbortSignal, allow404 = false): Promise<T | undefined> {
   const policy = loadingPolicy();
   const timeout = context.stage === "types" ? policy.typesTimeoutMs : context.stage === "module" ? policy.moduleTimeoutMs : policy.manifestTimeoutMs;
-  return withDeadline(context, timeout, (active) => retryNetwork(async () => {
+  return observeLoading(context, "fetch", () => withDeadline(context, timeout, (active) => retryNetwork(async () => {
     let target = assertRemoteURL(url, context.remote);
     let response: Response;
     for (let redirects = 0; ; redirects++) {
@@ -119,7 +121,7 @@ export async function fetchResource<T>(url: string, context: LoadContext, read: 
       throw new RemoteLoadError(context, "HTTP_ERROR", `HTTP ${response.status}`, { status: response.status });
     }
     return await read(response);
-  }, active), signal);
+  }, active, transient, context), signal));
 }
 
 export async function withProvider<T>(context: LoadContext, callback: () => Promise<T>): Promise<T> {

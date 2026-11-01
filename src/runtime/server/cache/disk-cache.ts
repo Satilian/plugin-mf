@@ -8,6 +8,7 @@ import type { CacheEntry } from "./entry.ts";
 import type { ServerCacheOptions, CachePruneResult } from "./config.ts";
 import type { LoadContext } from "../../../protocol/load-error.ts";
 import { fetchResource } from "../../../transport/loading.ts";
+import { emitLoadingEvent } from "../../../transport/observability.ts";
 
 const DEFAULT_MAX_BYTES = 512 * 1024 * 1024;
 
@@ -71,6 +72,7 @@ export class DiskCache {
           if (file.integrity && createHash("sha256").update(buffer).digest("hex") !== file.integrity) throw new Error(`[plugin-mf] Server asset integrity mismatch: ${file.path}`);
           deadlineSignal.throwIfAborted();
           downloadedBytes += buffer.byteLength;
+          emitLoadingEvent({ ...context, type: "download", operation: "disk", bytes: buffer.byteLength });
           if (downloadedBytes > this.#maxBytes) throw new Error("[plugin-mf] Server release exceeds cache maxBytes");
           const target = inside(staging, file.path);
           await mkdir(path.dirname(target), { recursive: true });
@@ -126,6 +128,8 @@ export class DiskCache {
         if (await isPinned(directory)) throw new Error("[plugin-mf] Active server cache entry is incomplete");
         await rm(directory, { recursive: true, force: true });
         await this.#download(root, entry, directory, context, deadlineSignal);
+      } else {
+        emitLoadingEvent({ ...context, type: "cache-hit", operation: "disk" });
       }
       const pruned = await prune(root, this.#maxBytes, directory);
       if (pruned.overBudgetBytes) throw new Error("[plugin-mf] Server cache limit reached by active ESM releases; raise maxBytes or restart workers");

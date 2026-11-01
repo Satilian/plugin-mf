@@ -7,6 +7,7 @@ import { configureLoading } from "../../transport/loading.ts";
 import { RemoteLoadError, type LoadingOptions } from "../../protocol/load-error.ts";
 import { configureNetwork } from "../../transport/network-policy.ts";
 import type { NetworkOptions } from "../../protocol/network-policy.ts";
+import { setObservationContext } from "../../transport/observability.ts";
 
 export { Loader } from "./loader.ts";
 export type { ServerCacheOptions, CachePruneResult } from "./loader.ts";
@@ -21,6 +22,10 @@ const requestContext = requestGlobal[requestContextKey] ??= new AsyncLocalStorag
 const signalKey = Symbol.for("plugin-mf.ssr-request-signal");
 const signalGlobal = globalThis as typeof globalThis & { [signalKey]?: AsyncLocalStorage<AbortSignal | undefined> };
 const requestSignal = signalGlobal[signalKey] ??= new AsyncLocalStorage<AbortSignal | undefined>();
+const traceKey = Symbol.for("plugin-mf.ssr-request-trace");
+const traceGlobal = globalThis as typeof globalThis & { [traceKey]?: AsyncLocalStorage<string | undefined> };
+const requestTrace = traceGlobal[traceKey] ??= new AsyncLocalStorage<string | undefined>();
+setObservationContext(() => ({ requestId: requestTrace.getStore() }));
 const runtimeKey = Symbol.for("plugin-mf.server-runtime");
 const runtimeGlobal = globalThis as typeof globalThis & {
   [runtimeKey]?: { options?: ServerCacheOptions; loader?: Loader };
@@ -36,8 +41,8 @@ function getLoader(): Loader {
   return runtime.loader ??= new Loader(runtime.options);
 }
 
-export function runWithMFRequest<T>(callback: () => T, options: { signal?: AbortSignal } = {}): T {
-  return requestSignal.run(options.signal, () => requestContext.run(new Map(), callback));
+export function runWithMFRequest<T>(callback: () => T, options: { signal?: AbortSignal; requestId?: string } = {}): T {
+  return requestTrace.run(options.requestId, () => requestSignal.run(options.signal, () => requestContext.run(new Map(), callback)));
 }
 
 export function getMFReleases(): SSRReleases {

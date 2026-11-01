@@ -7,6 +7,7 @@ import { RemoteLoadError, type LoadContext, type LoadStage } from "../../protoco
 import { loadingPolicy, withDeadline, withProvider } from "../../transport/loading.ts";
 import { assertSharedRequirements } from "../../sharing/registry.ts";
 import { assertRemoteURL } from "../../transport/network-policy.ts";
+import { emitLoadingEvent, observeLoading } from "../../transport/observability.ts";
 
 type RemoteExport = { value: unknown; stylesheets: string[] };
 
@@ -28,7 +29,9 @@ export class RemoteSource {
   ) {}
 
   protected context(stage: LoadStage): LoadContext {
-    return { remote: this.url.replace(/\/$/, ""), releaseId: this.releaseId, stage };
+    const context: LoadContext = { remote: this.url.replace(/\/$/, ""), stage };
+    Object.defineProperty(context, "releaseId", { enumerable: true, get: () => this.releaseId });
+    return context;
   }
 
   getSelectedRelease(): ResolvedRelease | null | undefined {
@@ -82,9 +85,13 @@ export class RemoteSource {
 
   loadExport(name: string): Promise<RemoteExport> {
     const cached = this.#exports.get(name);
-    if (cached) return cached;
-    const promise = withProvider(this.context("module"), () => withDeadline(this.context("module"), loadingPolicy().moduleTimeoutMs,
-      (signal) => this.#loadExport(name, signal), this.signal)).catch((error: unknown) => {
+    if (cached) {
+      emitLoadingEvent({ ...this.context("module"), type: "cache-hit", operation: "remote" });
+      return cached;
+    }
+    const context = this.context("module");
+    const promise = observeLoading(context, "remote", () => withProvider(context, () => withDeadline(context, loadingPolicy().moduleTimeoutMs,
+      (signal) => this.#loadExport(name, signal), this.signal))).catch((error: unknown) => {
       this.#exports.delete(name);
       if (error instanceof RemoteLoadError && !error.releaseId && this.releaseId) {
         throw new RemoteLoadError(this.context(error.stage), error.code, "Loading failed", { cause: error, status: error.status });

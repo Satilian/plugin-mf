@@ -7,6 +7,7 @@ import { fetchResource, loadingPolicy, withDeadline, withProvider } from "../tra
 import type { LoadContext } from "../protocol/load-error.ts";
 import { atomicWrite, hasCode, publishTypes, readCachedTypes, type CachedTypes } from "./type-cache.ts";
 import { validateTypesOptions, type TypesSyncOptions } from "./types-options.ts";
+import { emitLoadingEvent } from "../transport/observability.ts";
 
 export type SyncTypesOptions = {
   remotes: Record<string, string>;
@@ -83,7 +84,10 @@ async function synchronize({ remotes, rootPath, types = {} }: SyncTypesOptions):
           console.warn(`[plugin-mf] Types cache unavailable for "${name}": ${message(error)}; downloading locked declarations`);
         }
       }
-      if (cached && !types.updateLock) return cached;
+      if (cached && !types.updateLock) {
+        emitLoadingEvent({ remote: provider, releaseId: cached.entry.releaseId, stage: "types", type: "cache-hit", operation: "types" });
+        return cached;
+      }
       if (types.offline) throw new Error(`[plugin-mf] No cached types for remote "${name}"`);
       const context: LoadContext = { remote: provider, releaseId: previous?.releaseId, stage: "types" };
       const result = await withProvider(context, () => withDeadline(context, loadingPolicy().typesTimeoutMs, (signal) =>

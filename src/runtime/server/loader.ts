@@ -5,6 +5,7 @@ import { describe } from "./cache/entry.ts";
 import type { ServerCacheOptions, CachePruneResult } from "./cache/config.ts";
 import type { LoadContext } from "../../protocol/load-error.ts";
 import { loadingPolicy, withDeadline } from "../../transport/loading.ts";
+import { emitLoadingEvent, observeLoading } from "../../transport/observability.ts";
 
 export type { ServerCacheOptions, CachePruneResult } from "./cache/config.ts";
 export type ServerModule = RemoteModule;
@@ -21,11 +22,14 @@ export class Loader implements ModuleLoader {
   load(url: string, context?: ModuleLoadContext): Promise<RemoteModule> {
     const entry = describe(url, context);
     const memoryKey = entry.key + ":" + url;
-    const cached = this.#cache.get(memoryKey);
-    if (cached) return cached;
     const loadContext: LoadContext = { remote: context?.provider ?? new URL(".", url).href, releaseId: context?.releaseId, stage: "module" };
-    const promise = withDeadline(loadContext, loadingPolicy().moduleTimeoutMs,
-      (deadlineSignal) => this.#load(entry, loadContext, deadlineSignal)).catch((error: unknown) => {
+    const cached = this.#cache.get(memoryKey);
+    if (cached) {
+      emitLoadingEvent({ ...loadContext, type: "cache-hit", operation: "module" });
+      return cached;
+    }
+    const promise = observeLoading(loadContext, "module", () => withDeadline(loadContext, loadingPolicy().moduleTimeoutMs,
+      (deadlineSignal) => this.#load(entry, loadContext, deadlineSignal))).catch((error: unknown) => {
       this.#cache.delete(memoryKey);
       throw error;
     });

@@ -4,6 +4,7 @@ import { configureLoading, fetchResource, loadingPolicy, retryNetwork, withDeadl
 import { RemoteLoadError, type LoadingOptions } from "../../protocol/load-error.ts";
 import { assertRemoteURL, configureNetwork } from "../../transport/network-policy.ts";
 import type { NetworkOptions } from "../../protocol/network-policy.ts";
+import { emitLoadingEvent, observeLoading } from "../../transport/observability.ts";
 
 import { Remote } from "../react/remote.ts";
 import { MF_RELEASES_ELEMENT_ID, parseSSRReleases, type SSRReleases } from "../../protocol/ssr-releases.ts";
@@ -17,10 +18,14 @@ export class Loader implements ModuleLoader {
   load(url: string, context?: ModuleLoadContext): Promise<RemoteModule> {
     const provider = context?.provider ?? url;
     assertRemoteURL(url, provider);
+    const loadContext = { remote: provider, releaseId: context?.releaseId, stage: "module" as const };
     const cached = this.#cache.get(url);
-    if (cached) return cached;
+    if (cached) {
+      emitLoadingEvent({ ...loadContext, type: "cache-hit", operation: "module" });
+      return cached;
+    }
     const attempt = this.#attempts.get(url) ?? 0;
-    const promise = withDeadline({ remote: context?.provider ?? url, releaseId: context?.releaseId, stage: "module" },
+    const promise = observeLoading(loadContext, "module", () => withDeadline(loadContext,
       loadingPolicy().moduleTimeoutMs, (signal) => retryNetwork(async (retry) => {
         const target = new URL(url);
         const generation = attempt + retry;
@@ -31,7 +36,7 @@ export class Loader implements ModuleLoader {
           return response.url || target.href;
         }, signal);
         return importModule(checked);
-      }, signal, (error) => error instanceof TypeError && /failed to fetch dynamically imported module|error loading dynamically imported module|failed to load module script|importing a module script failed/i.test(error.message))).catch((error: unknown) => {
+      }, signal, (error) => error instanceof TypeError && /failed to fetch dynamically imported module|error loading dynamically imported module|failed to load module script|importing a module script failed/i.test(error.message), loadContext))).catch((error: unknown) => {
       this.#cache.delete(url);
       this.#attempts.set(url, (this.#attempts.get(url) ?? attempt) + 1);
       throw error;

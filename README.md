@@ -308,6 +308,31 @@ Provider, манифест, deployment pipeline и локальный кеш д�
 JS уже загруженного модуля и последующие действия доверенного кода нельзя ограничить
 проверкой URL в loader. Настройка network общая для realm, её задаёт consumer.
 
+## События, метрики и tracing
+
+`configureObservability(handler)` из client/server подключает обработчик без
+зависимости от monitoring SDK; вызов без handler отключает его. События содержат
+`remote`, выбранный `releaseId`, `stage`, `operation`, тип события и длительность
+в миллисекундах. `start` и `success/error` объединяются по `loadId`; также есть
+`cache-hit`, `retry`, `download` и `prune`. Operation различает загрузку expose,
+fetch, module import, types и disk. Объём disk-событий — проверенные скачанные bytes.
+Cleanup использует системный remote `cache://server`.
+
+`runWithMFRequest(callback, { requestId, signal })` привязывает события к SSR-запросу
+через AsyncLocalStorage, общий для вложенных bundles. В примере shell `MF_TRACE=1`
+включает JSON-логирование; requestId берётся из `x-request-id` либо генерируется.
+Для tracing-адаптера начинайте span по start/loadId, завершайте его по success/error,
+добавляйте requestId как correlation attribute. Callback может быть async; его ошибки
+логируются отдельно и не нарушают загрузку. Сам adapter отвечает за экспорт spans
+и ограничение своей очереди. Не сохраняйте объекты HTTP-запросов внутри handler.
+
+`getLoadingMetrics()` возвращает снимок накопленных starts, successes, errors,
+cacheHits, retries, downloadedBytes, diskHits, diskDownloads и prunedBytes.
+Счётчики общие для одного JS realm; вложенные операции учитываются отдельно,
+это не число HTTP-запросов пользователя. Для разрезов по provider/requestId собирайте
+события своим handler. URL в событиях очищены от credentials, query и fragment;
+ошибка содержит только code/status. Исходные cause и тела ответов не экспортируются.
+
 ## Архитектура и проверка изменений
 
 Пакет сохраняет четыре публичных входа: основной Rsbuild-плагин, client, server и shared.

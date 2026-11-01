@@ -1,0 +1,168 @@
+{
+  "node": "v24.22.1",
+  "platform": "win32",
+  "gcExposed": true,
+  "registered": 120,
+  "note": "Synthetic tiny ESM providers; local disk/network; includes real React SSR, not full production bundles or browser heap",
+  "samples": [
+    {
+      "scenario": "registered-vs-active",
+      "registered": 120,
+      "active": 1,
+      "ms": 43,
+      "requests": 6
+    },
+    {
+      "scenario": "registered-vs-active",
+      "registered": 120,
+      "active": 10,
+      "ms": 714,
+      "requests": 57
+    },
+    {
+      "scenario": "registered-vs-active",
+      "registered": 120,
+      "active": 100,
+      "ms": 8980,
+      "requests": 570
+    },
+    {
+      "scenario": "registered-vs-active",
+      "registered": 120,
+      "active": 120,
+      "ms": 3163,
+      "requests": 420
+    },
+    {
+      "scenario": "concurrent-SSR",
+      "requests": 8,
+      "active": 10,
+      "ms": 99,
+      "durationsMs": [
+        97,
+        90,
+        96,
+        95,
+        95,
+        94,
+        95,
+        95
+      ]
+    },
+    {
+      "scenario": "multi-process-shared-cache",
+      "workers": 3,
+      "assetDownloads": 3,
+      "reclaimedEntries": 1
+    },
+    {
+      "scenario": "fresh-process-cold-SSR",
+      "result": "cold-SSR",
+      "active": 120,
+      "ms": 14002,
+      "htmlBytes": 2655,
+      "reclaimedEntries": 120
+    },
+    {
+      "scenario": "deploy-and-rollback",
+      "inFlight": "r1",
+      "nextRequest": "r2",
+      "rollback": "r1"
+    },
+    {
+      "scenario": "provider-fault",
+      "fault": "slow",
+      "ms": 103
+    },
+    {
+      "scenario": "provider-fault",
+      "fault": "404",
+      "ms": 3
+    },
+    {
+      "scenario": "provider-fault",
+      "fault": "503",
+      "ms": 19
+    },
+    {
+      "scenario": "provider-fault",
+      "fault": "malformed",
+      "ms": 1
+    },
+    {
+      "scenario": "provider-fault",
+      "fault": "corrupt",
+      "ms": 6
+    },
+    {
+      "scenario": "provider-fault",
+      "fault": "incompatible",
+      "ms": 3
+    },
+    {
+      "scenario": "local-fallback",
+      "healthyRemotes": 2,
+      "failedBoundaries": 1,
+      "ms": 6
+    },
+    {
+      "scenario": "active-lease-and-dynamic-import",
+      "protectedBytes": 81357
+    },
+    {
+      "scenario": "sequential-updates",
+      "releases": 20,
+      "durationsMs": [
+        97,
+        95,
+        98,
+        99,
+        100,
+        97,
+        98,
+        98,
+        99,
+        107,
+        101,
+        103,
+        109,
+        115,
+        109,
+        103,
+        103,
+        104,
+        105,
+        105
+      ],
+      "rssBefore": 82554880,
+      "rssAfter": 95166464,
+      "heapBefore": 16300880,
+      "heapAfter": 16612640,
+      "disk": {
+        "bytes": 94762,
+        "protectedBytes": 94762,
+        "removedEntries": 0,
+        "overBudgetBytes": 0
+      }
+    }
+  ],
+  "limits": {
+    "coldSSRMs": 30000,
+    "warmSSRMs": 5000,
+    "faultMs": 5000,
+    "heapGrowthBytes": 67108864,
+    "cacheBytes": 33554432
+  },
+  "metrics": {
+    "starts": 1930,
+    "successes": 1917,
+    "errors": 13,
+    "cacheHits": 196,
+    "retries": 1,
+    "downloadedBytes": 26605,
+    "diskHits": 1,
+    "diskDownloads": 425,
+    "prunedBytes": 81367
+  },
+  "peakProviderRequests": 1
+}

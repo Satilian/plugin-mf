@@ -46,6 +46,7 @@
     "build": "rslib",
     "types:sync": "node dist/build/types-cli.js",
     "benchmark:routes": "node scripts/benchmark-routes.mjs",
+    "benchmark:scale": "node --expose-gc scripts/scale-workload.mjs",
     "build:shell": "pnpm --filter ./example/shell* run build",
     "build:host": "pnpm --filter ./example/host* run build",
     "build:subhost": "pnpm --filter ./example/sub-host* run build",

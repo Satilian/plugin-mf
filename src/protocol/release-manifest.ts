@@ -24,10 +24,7 @@ export function parseReleaseManifest(value: unknown): ReleaseManifest {
     throw new Error(`Unsupported release manifest version: ${String(manifest.version)}`);
   }
 
-  if (typeof manifest.releaseId !== "string" || !manifest.releaseId.trim() ||
-    !/^[a-zA-Z0-9][a-zA-Z0-9._-]*$/.test(manifest.releaseId)) {
-    throw new Error("Invalid releaseId in release manifest");
-  }
+  parseReleaseId(manifest.releaseId);
 
   for (const key of ["server", "client", "types"] as const) {
     const value = manifest[key];
@@ -44,4 +41,11 @@ export function parseReleaseManifest(value: unknown): ReleaseManifest {
   }
 
   return manifest as ReleaseManifest;
+}
+
+export function parseReleaseId(value: unknown): string {
+  if (typeof value !== "string" || !/^[a-zA-Z0-9][a-zA-Z0-9._-]*$/.test(value)) {
+    throw new Error("Invalid releaseId in release manifest");
+  }
+  return value;
 }

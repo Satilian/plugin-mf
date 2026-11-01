@@ -15,6 +15,7 @@ doc_build/
 .idea
 
 *mf-types.d.ts
+example/**/mf-types.lock.json
 
 # Browser verification artifacts
 .playwright-mcp/

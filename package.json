@@ -23,6 +23,9 @@
     }
   },
   "types": "./dist/index.d.ts",
+  "bin": {
+    "plugin-mf-types": "./dist/build/types-cli.js"
+  },
   "files": [
     "dist"
   ],
@@ -40,6 +43,7 @@
   },
   "scripts": {
     "build": "rslib",
+    "types:sync": "node dist/build/types-cli.js",
     "build:shell": "pnpm --filter ./example/shell* run build",
     "build:host": "pnpm --filter ./example/host* run build",
     "build:subhost": "pnpm --filter ./example/sub-host* run build",

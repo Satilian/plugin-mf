@@ -1,6 +1,7 @@
 import { defineConfig, RsbuildConfig } from "@rsbuild/core";
 import { pluginReact } from "@rsbuild/plugin-react";
 import { pluginMF } from "plugin-mf";
+import mfTypes from "./mf-types.config.json";
 
 export default defineConfig(() => {
   const config: RsbuildConfig = {
@@ -33,6 +34,7 @@ export default defineConfig(() => {
     plugins: [
       pluginReact(),
       pluginMF({
+        ...mfTypes,
         loading: {
           manifestTimeoutMs: 2_000,
           moduleTimeoutMs: 6_000,
@@ -40,11 +42,6 @@ export default defineConfig(() => {
           retries: 2,
           retryDelayMs: 100,
           circuitBreaker: { failureThreshold: 3, cooldownMs: 5_000 },
-        },
-        remotes: {
-          host1: "http://localhost:3001/mf",
-          host2: "http://localhost:3002/mf",
-          subhost1: "http://localhost:4001/mf",
         },
         shared: ["react", "react-dom", "react/jsx-runtime"],
       }),

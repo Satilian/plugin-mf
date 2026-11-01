@@ -1,6 +1,7 @@
 import { ConfigParams, defineConfig, RsbuildConfig } from "@rsbuild/core";
 import { pluginReact } from "@rsbuild/plugin-react";
 import { pluginMF } from "plugin-mf";
+import mfTypes from "./mf-types.config.json";
 
 export default defineConfig(({ env }: ConfigParams) => {
   const config: RsbuildConfig = {
@@ -36,9 +37,7 @@ export default defineConfig(({ env }: ConfigParams) => {
     plugins: [
       pluginReact(),
       pluginMF({
-        remotes: {
-          subhost1: "http://localhost:4001/mf",
-        },
+        ...mfTypes,
         expose: {
           P: "./src/p/p.tsx",
           Div: "./src/div/div.tsx",

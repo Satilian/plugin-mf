@@ -56,7 +56,7 @@ export const pluginMF = (mfConfig: PluginMFConfig = {}): RsbuildPlugin => ({
 
     if (remoteNames.length) {
       api.onBeforeBuild(async () => {
-        await syncTypes({ remotes: mfConfig.remotes ?? {}, rootPath: api.context.rootPath });
+        await syncTypes({ remotes: mfConfig.remotes ?? {}, rootPath: api.context.rootPath, types: mfConfig.types });
       });
 
       api.modifyRspackConfig((config) => {

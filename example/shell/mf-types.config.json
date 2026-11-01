@@ -1,0 +1,7 @@
+{
+  "remotes": {
+    "host1": "http://localhost:3001/mf",
+    "host2": "http://localhost:3002/mf",
+    "subhost1": "http://localhost:4001/mf"
+  }
+}

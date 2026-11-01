@@ -42,8 +42,8 @@ export default defineConfig(({ env }: ConfigParams) => {
           P: "./src/p/p.tsx",
           Div: "./src/div/div.tsx",
         },
-        externals: ["react", "react-dom", "react/jsx-runtime"],
-        shared: ["react", "react-dom", "react/jsx-runtime"],
+        externals: [{ name: "react", requiredVersion: "^19.2.8", singleton: true }, "react-dom"],
+        shared: [{ name: "react", requiredVersion: "^19.2.8", singleton: true }, "react-dom"],
       }),
     ],
   };

@@ -1,3 +1,5 @@
+import { parseSharedRequirements, type ReleaseSharing } from "./shared-dependencies.ts";
+
 export const RELEASE_MANIFEST_VERSION = 1;
 
 /** Paths are relative to the directory containing manifest.json. */
@@ -7,6 +9,7 @@ export type ReleaseManifest = {
   server?: string;
   client?: string;
   types: string;
+  shared?: ReleaseSharing;
 };
 
 export type ResolvedRelease = {
@@ -25,6 +28,12 @@ export function parseReleaseManifest(value: unknown): ReleaseManifest {
   }
 
   parseReleaseId(manifest.releaseId);
+  if (manifest.shared !== undefined) {
+    const shared = manifest.shared;
+    if (!shared || typeof shared !== "object" || !("client" in shared) || !("server" in shared)) throw new Error("Invalid release shared requirements");
+    parseSharedRequirements(shared.client);
+    parseSharedRequirements(shared.server);
+  }
 
   for (const key of ["server", "client", "types"] as const) {
     const value = manifest[key];

@@ -39,7 +39,7 @@ export default defineConfig(({ env }: ConfigParams) => {
         expose: {
           Button: "./src/button/button.tsx",
         },
-        externals: ["react", "react-dom", "react/jsx-runtime"],
+        externals: [{ name: "react", requiredVersion: "^19.2.8", singleton: true }, "react-dom"],
       }),
     ],
   };

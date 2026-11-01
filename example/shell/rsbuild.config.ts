@@ -43,7 +43,7 @@ export default defineConfig(() => {
           retryDelayMs: 100,
           circuitBreaker: { failureThreshold: 3, cooldownMs: 5_000 },
         },
-        shared: ["react", "react-dom", "react/jsx-runtime"],
+        shared: [{ name: "react", requiredVersion: "^19.2.8", singleton: true }, "react-dom"],
       }),
     ],
   };

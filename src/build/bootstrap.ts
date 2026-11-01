@@ -1,15 +1,16 @@
 import type { Rspack } from "@rsbuild/core";
 import type { PluginMFConfig } from "./config.ts";
+import type { SharedRequirements } from "../protocol/shared-dependencies.ts";
 
 type Config = {
   name?: string;
   entry?: Rspack.Entry;
 };
 
-export function modifyEntry<T extends Config>(config: T, mfConfig: PluginMFConfig) {
+export function modifyEntry<T extends Config>(config: T, mfConfig: PluginMFConfig, shared: SharedRequirements) {
   if (!mfConfig.shared?.length || !config.entry) return;
 
-  const bootstrap = createSharedBootstrap(mfConfig.shared);
+  const bootstrap = createSharedBootstrap(shared);
 
   if (typeof config.entry === "string" || Array.isArray(config.entry)) {
     config.entry = [bootstrap, ...[config.entry].flat()] as T["entry"];
@@ -34,13 +35,14 @@ export function modifyEntry<T extends Config>(config: T, mfConfig: PluginMFConfi
   }
 }
 
-function createSharedBootstrap(shared: string[]) {
+function createSharedBootstrap(requirements: SharedRequirements) {
+  const shared = Object.keys(requirements);
   const imports = shared
     .map((request, index) => `import * as shared${index} from ${JSON.stringify(request)};`)
     .join("\n");
 
   const registrations = shared
-    .map((request, index) => `registerShared(${JSON.stringify(request)}, shared${index});`)
+    .map((request, index) => `registerShared(${JSON.stringify(request)}, shared${index}, ${JSON.stringify(requirements[request].version)}, "default", ${requirements[request].singleton});`)
     .join("\n");
 
   const source = `

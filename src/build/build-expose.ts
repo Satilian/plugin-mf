@@ -3,11 +3,12 @@ import { writeFile } from "node:fs/promises";
 import path from "node:path";
 import { formatStats } from "./format-stats.ts";
 import type { RemoteManifest } from "../protocol/remote-manifest.ts";
+import type { SharedRequirements } from "../protocol/shared-dependencies.ts";
 
 export type BuildExposeProps = {
   releaseId: string;
   entry: Record<string, string>;
-  externals?: string[];
+  externals?: SharedRequirements;
   config: Rspack.Configuration;
 };
 
@@ -58,8 +59,8 @@ export async function buildExpose({ entry, externals, releaseId, config: baseCon
   // Remotes must use the host's module instances, including during SSR.
   // Place this before inherited externals so they cannot resolve a second copy.
   config.externals.unshift(({ request }, callback) => {
-    if (request && externals?.includes(request)) {
-      callback(undefined, `var globalThis.__MF_GET_SHARED__(${JSON.stringify(request)})`);
+    if (request && externals && Object.hasOwn(externals, request)) {
+      callback(undefined, `var globalThis.__MF_GET_SHARED__(${JSON.stringify(request)}, "default", ${JSON.stringify(externals[request].requiredVersion)})`);
       return;
     }
 

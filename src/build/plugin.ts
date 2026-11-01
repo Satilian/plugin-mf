@@ -6,10 +6,13 @@ import { modifyEntry } from "./bootstrap.ts";
 import { syncTypes } from "./sync-types.ts";
 import type { PluginMFConfig } from "./config.ts";
 import { configureLoading } from "../transport/loading.ts";
+import { resolveShared } from "./shared-dependencies.ts";
 
 export const pluginMF = (mfConfig: PluginMFConfig = {}): RsbuildPlugin => ({
   name: "plugin-mf",
   setup(api) {
+    const shared = resolveShared(mfConfig.shared, api.context.rootPath);
+    const externals = resolveShared(mfConfig.externals, api.context.rootPath);
     if (mfConfig.loading) configureLoading(mfConfig.loading);
     let nodeConfig: Rspack.Configuration | undefined;
     let webConfig: Rspack.Configuration | undefined;
@@ -49,10 +52,12 @@ export const pluginMF = (mfConfig: PluginMFConfig = {}): RsbuildPlugin => ({
     api.onAfterBuild(async () => {
       if (!mfConfig.expose || Object.keys(mfConfig.expose).length === 0) return;
 
-      await buildRelease({ entry: mfConfig.expose, externals: mfConfig.externals, nodeConfig, webConfig, rootPath: api.context.rootPath });
+      await buildRelease({ entry: mfConfig.expose, externals, nodeConfig, webConfig, rootPath: api.context.rootPath });
     });
 
     const remoteNames = Object.keys(mfConfig.remotes || {});
+
+    api.modifyRspackConfig((config) => modifyEntry<typeof config>(config, mfConfig, shared));
 
     if (remoteNames.length) {
       api.onBeforeBuild(async () => {
@@ -68,7 +73,6 @@ export const pluginMF = (mfConfig: PluginMFConfig = {}): RsbuildPlugin => ({
           }),
         );
 
-        modifyEntry<typeof config>(config, mfConfig);
       });
 
       api.resolve(({ resolveData, environment }) => {

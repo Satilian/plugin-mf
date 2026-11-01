@@ -42,8 +42,8 @@ export default defineConfig(({ env }: ConfigParams) => {
           Span: "./src/Span.tsx",
           Section: "./src/section/section.tsx",
         },
-        externals: ["react", "react-dom", "react/jsx-runtime"],
-        shared: ["react", "react-dom", "react/jsx-runtime"],
+        externals: [{ name: "react", requiredVersion: "^19.2.8", singleton: true }, "react-dom"],
+        shared: [{ name: "react", requiredVersion: "^19.2.8", singleton: true }, "react-dom"],
       }),
     ],
   };

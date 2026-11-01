@@ -5,10 +5,11 @@ import path from "node:path";
 import { buildExpose, getMFOutputPath } from "./build-expose.ts";
 import { buildTypes } from "./build-types.ts";
 import { RELEASE_MANIFEST_VERSION, type ReleaseManifest } from "../protocol/release-manifest.ts";
+import type { SharedRequirements } from "../protocol/shared-dependencies.ts";
 
 type BuildReleaseOptions = {
   entry: Record<string, string>;
-  externals?: string[];
+  externals?: SharedRequirements;
   nodeConfig?: Rspack.Configuration;
   webConfig?: Rspack.Configuration;
   rootPath: string;
@@ -53,6 +54,7 @@ export async function buildRelease({ entry, externals, nodeConfig, webConfig, ro
       ...(nodeConfig ? { server: `${releaseId}/server/manifest.json` } : {}),
       ...(webConfig ? { client: `${releaseId}/client/manifest.json` } : {}),
       types: `${releaseId}/types/manifest.json`,
+      shared: { client: externals ?? {}, server: externals ?? {} },
     };
     const manifestSource = JSON.stringify(manifest, null, 2);
     await writeFile(path.join(outputPath, releaseId, "pointer.json"), manifestSource, "utf8");

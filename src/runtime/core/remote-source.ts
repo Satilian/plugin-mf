@@ -5,6 +5,7 @@ import type { ResolvedRelease } from "../../protocol/release-manifest.ts";
 import type { ModuleLoader, RemoteScope } from "../../protocol/module.ts";
 import { RemoteLoadError, type LoadContext, type LoadStage } from "../../protocol/load-error.ts";
 import { loadingPolicy, withDeadline, withProvider } from "../../transport/loading.ts";
+import { assertSharedRequirements } from "../../sharing/registry.ts";
 
 type RemoteExport = { value: unknown; stylesheets: string[] };
 
@@ -66,6 +67,13 @@ export class RemoteSource {
     const release = await this.#getRelease(signal);
     this.releaseId = release?.manifest.releaseId;
     this.#selectedRelease = release;
+    if (release?.manifest.shared) {
+      try {
+        assertSharedRequirements(release.manifest.shared[this.scope]);
+      } catch (error) {
+        throw new RemoteLoadError(this.context("module"), "LOAD_FAILED", error instanceof Error ? error.message : "Incompatible shared dependencies", { cause: error });
+      }
+    }
     const { manifest, __baseUrl } = await this.#loadManifest(this.scope, release, signal);
     this.manifest = manifest;
     this.baseUrl = __baseUrl;

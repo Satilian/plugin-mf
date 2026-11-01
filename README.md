@@ -375,6 +375,46 @@ About: 1820954 → 1830858 bytes, запросы 15 → 19.
 малый объём выборки и React Refresh делают задержки шумными. Поэтому в этих примерах
 разделение не включено по умолчанию; включайте его для конкретного workload после замеров.
 
+## Runtime registry, rollback и canary
+
+`configureRegistry({ url: "https://config.example/mf.json", maxAgeMs: 30000 })`
+и `await refreshRegistry()` доступны из client/server. JSON — объект по именам
+remotes, например `{ "host1": { "url": "https://host1.example/mf", "enabled": true } }`.
+Вместо URL конфигурации можно передать `remotes` прямо в configureRegistry.
+Приоритет: внешний registry, локальные runtime overrides, статические aliases bundle.
+Статические aliases вложенных bundles остаются локальными; runtime имена общие.
+Новые имена доступны через getRemote; shorthand imports требуют alias при сборке.
+
+Refresh валидирует формат и sources до публикации, дедуплицируется и кеширует попытку
+на maxAgeMs. При отказе возвращает false, пишет предупреждение и сохраняет последний
+успешный snapshot; `refreshRegistry({ force: true })` пропускает TTL. Последняя
+успешная внешняя конфигурация хранится в памяти процесса; после рестарта до успешного
+refresh доступны статические/локальные настройки. Изменение URL registry не позволяет
+старому незавершённому запросу перезаписать конфигурацию нового источника.
+
+Для фиксации версии entry принимает `release: { baseUrl, manifest }`, где manifest —
+полная копия pointer.json нужного релиза, а baseUrl — корень mf provider (не каталог
+pointer snapshot). Это сохраняет shared-требования и пути assets того же релиза.
+Без release выбирается текущий pointer; `release: null` явно включает legacy layout.
+`enabled: false` останавливает загрузку до обращения к provider. Aliases одного URL
+не могут выбирать конфликтующие release snapshots в одном запросе.
+
+Canary задаётся как `canary: { percentage: 10, url, release? }` рядом с основным entry.
+`runWithMFRequest(callback, { selectionKey })` детерминированно выбирает вариант по
+ключу пользователя/сессии и имени remote. Пустой ключ даёт один общий cohort; caller
+должен передать стабильный ключ для пользовательского распределения. Пример shell
+использует session cookie mf-cohort. `getRegistrySnapshot(selectionKey?)` позволяет
+просмотреть выбранную конфигурацию. Canary не является криптографической рандомизацией.
+
+Каждый SSR-запрос получает свой snapshot overrides до рендера. Обновления применяются
+к новым запросам, начатые сохраняют выбор. HTML содержит mf-registry и mf-releases;
+`initializeMFReleases` читает оба до hydration. Открытая страница сохраняет адреса,
+cohort и релизы для отложенных imports. Для rollback опубликуйте старый release snapshot
+в registry и выполните refresh; пересборка consumer не нужна. Хранение старых assets
+по-прежнему обязательно. В shell переменная MF_REGISTRY_URL включает refresh перед SSR.
+Для CSR без SSR вызовите refresh перед первым рендером. Network allowlist должен
+разрешать registry и providers/CDN, включая сохранённые версии открытых страниц.
+
 ## Архитектура и проверка изменений
 
 Пакет сохраняет четыре публичных входа: основной Rsbuild-плагин, client, server и shared.

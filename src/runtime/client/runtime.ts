@@ -7,6 +7,8 @@ import type { NetworkOptions } from "../../protocol/network-policy.ts";
 import { emitLoadingEvent, observeLoading } from "../../transport/observability.ts";
 import { preload } from "../core/preload.ts";
 import type { PreloadOptions, PreloadTarget } from "../../protocol/preload.ts";
+import { getRegistryOverrides, registerStaticRemotes } from "../../transport/registry.ts";
+import { MF_REGISTRY_ELEMENT_ID, findRegistrySelection, parseRegistry, selectRegistry, type RegistrySnapshot } from "../../protocol/registry.ts";
 
 import { Remote } from "../react/remote.ts";
 import { MF_RELEASES_ELEMENT_ID, parseSSRReleases, type SSRReleases } from "../../protocol/ssr-releases.ts";
@@ -48,8 +50,10 @@ export class Loader implements ModuleLoader {
   }
 }
 
-const remotes = new Map<string, Remote>();
+const remotes = new Map<string, { identity: string; remote: Remote }>();
 let releases: SSRReleases | undefined;
+let pinnedRegistry: RegistrySnapshot | undefined;
+let registryInitialized = false;
 
 function readMFReleases(): SSRReleases | undefined {
   if (releases) return releases;
@@ -63,6 +67,14 @@ export async function initializeMFReleases(): Promise<void> {
     await new Promise<void>((resolve) => document.addEventListener("DOMContentLoaded", () => resolve(), { once: true }));
   }
   readMFReleases();
+  readRegistry();
+}
+
+function readRegistry(): RegistrySnapshot | undefined {
+  if (pinnedRegistry) return pinnedRegistry;
+  const element = document.getElementById(MF_REGISTRY_ELEMENT_ID);
+  if (element) pinnedRegistry = selectRegistry(parseRegistry(JSON.parse(element.textContent || "")), "");
+  return pinnedRegistry;
 }
 
 declare const __MF_REMOTES__: Record<string, string> | undefined;
@@ -71,23 +83,23 @@ declare const __MF_NETWORK__: NetworkOptions | undefined;
 if (typeof __MF_NETWORK__ !== "undefined") configureNetwork(__MF_NETWORK__);
 
 function ensureInit() {
-  if (remotes.size > 0) return;
+  if (registryInitialized) return;
   if (typeof __MF_LOADING__ !== "undefined") configureLoading(__MF_LOADING__);
 
-  const loader = new Loader();
-  for (const [name, url] of Object.entries(__MF_REMOTES__ || {})) {
-    remotes.set(name, new Remote(url, loader, "client", () => readMFReleases()?.[url.replace(/\/$/, "")]));
-  }
+  registerStaticRemotes(typeof __MF_REMOTES__ === "undefined" ? {} : __MF_REMOTES__ ?? {});
+  registryInitialized = true;
 }
 
 export function getRemote(name: string): Remote {
   ensureInit();
 
-  const remote = remotes.get(name);
-  if (!remote) {
-    throw new RemoteLoadError({ remote: name, stage: "module" }, "LOAD_FAILED", `Remote not found. Available: ${[...remotes.keys()].join(", ") || "none"}`);
-  }
-
+  const selection = findRegistrySelection(name, typeof __MF_REMOTES__ === "undefined" ? undefined : __MF_REMOTES__?.[name], readRegistry() ?? getRegistryOverrides());
+  if (!selection || selection.enabled === false) throw new RemoteLoadError({ remote: name, stage: "module" }, "LOAD_FAILED", selection ? "Remote is disabled" : "Remote not found in registry");
+  const identity = JSON.stringify(selection);
+  const cached = remotes.get(name);
+  if (cached?.identity === identity) return cached.remote;
+  const remote = new Remote(selection.url, new Loader(), "client", () => selection.release !== undefined ? selection.release : readMFReleases()?.[selection.url]);
+  remotes.set(name, { identity, remote });
   return remote;
 }
 

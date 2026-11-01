@@ -6,9 +6,10 @@ import { renderToPipeableStream } from "react-dom/server.node";
 import { PassThrough } from "node:stream";
 import { randomUUID } from "node:crypto";
 import App from "./App";
-import { configureObservability, runWithMFRequest, serializeMFReleases } from "plugin-mf/server";
+import { configureObservability, configureRegistry, refreshRegistry, runWithMFRequest, serializeMFReleases } from "plugin-mf/server";
 
 if (process.env.MF_TRACE === "1") configureObservability((event) => console.log(JSON.stringify({ source: "mf", ...event })));
+if (process.env.MF_REGISTRY_URL) configureRegistry({ url: process.env.MF_REGISTRY_URL });
 
 const app: Express = express();
 const port = 3000;
@@ -23,7 +24,11 @@ const html = fs.readFileSync(resolve("dist/index.html"), "utf8");
 const [head, tail] = html.split(splitPattern);
 app.use(express.static("dist", { index: false }));
 
-app.get("{*splat}", (req: Request, res: Response) => {
+app.get("{*splat}", async (req: Request, res: Response) => {
+  if (process.env.MF_REGISTRY_URL) await refreshRegistry();
+  const existingCohort = req.get("cookie")?.match(/(?:^|;\s*)mf-cohort=([a-zA-Z0-9-]+)/)?.[1];
+  const selectionKey = existingCohort ?? randomUUID();
+  if (!existingCohort) res.cookie("mf-cohort", selectionKey, { httpOnly: true, sameSite: "lax", secure: req.secure });
   const controller = new AbortController();
   runWithMFRequest(() => {
     const body = new PassThrough();
@@ -81,7 +86,7 @@ app.get("{*splat}", (req: Request, res: Response) => {
       },
     });
     res.once("close", disconnect);
-  }, { signal: controller.signal, requestId: req.get("x-request-id") ?? randomUUID() });
+  }, { signal: controller.signal, requestId: req.get("x-request-id") ?? randomUUID(), selectionKey });
 });
 
 app.listen(port, () => console.log("Example app listening on port " + port));

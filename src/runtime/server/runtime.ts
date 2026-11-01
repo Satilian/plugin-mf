@@ -10,11 +10,17 @@ import type { NetworkOptions } from "../../protocol/network-policy.ts";
 import { setObservationContext } from "../../transport/observability.ts";
 import { preload } from "../core/preload.ts";
 import type { PreloadOptions, PreloadTarget } from "../../protocol/preload.ts";
+import { getRegistryOverrides, registerStaticRemotes } from "../../transport/registry.ts";
+import { MF_REGISTRY_ELEMENT_ID, findRegistrySelection, type RegistrySnapshot } from "../../protocol/registry.ts";
 
 export { Loader } from "./loader.ts";
 export type { ServerCacheOptions, CachePruneResult } from "./loader.ts";
 
-const remotes = new Map<string, Remote>();
+const remotes = new Map<string, { identity: string; remote: Remote }>();
+let registryInitialized = false;
+const registryKey = Symbol.for("plugin-mf.ssr-request-registry");
+const registryGlobal = globalThis as typeof globalThis & { [registryKey]?: AsyncLocalStorage<RegistrySnapshot> };
+const requestRegistry = registryGlobal[registryKey] ??= new AsyncLocalStorage<RegistrySnapshot>();
 // Nested remote bundles must participate in the same SSR request.
 const requestContextKey = Symbol.for("plugin-mf.ssr-request-context");
 const requestGlobal = globalThis as typeof globalThis & {
@@ -43,8 +49,10 @@ function getLoader(): Loader {
   return runtime.loader ??= new Loader(runtime.options);
 }
 
-export function runWithMFRequest<T>(callback: () => T, options: { signal?: AbortSignal; requestId?: string } = {}): T {
-  return requestTrace.run(options.requestId, () => requestSignal.run(options.signal, () => requestContext.run(new Map(), callback)));
+export function runWithMFRequest<T>(callback: () => T, options: { signal?: AbortSignal; requestId?: string; selectionKey?: string } = {}): T {
+  initializeRegistry();
+  return requestRegistry.run(getRegistryOverrides(options.selectionKey), () =>
+    requestTrace.run(options.requestId, () => requestSignal.run(options.signal, () => requestContext.run(new Map(), callback))));
 }
 
 export function getMFReleases(): SSRReleases {
@@ -61,7 +69,8 @@ export function getMFReleases(): SSRReleases {
 
 export function serializeMFReleases(): string {
   const json = JSON.stringify(getMFReleases()).replace(/</g, "\\u003c");
-  return `<script id="${MF_RELEASES_ELEMENT_ID}" type="application/json">${json}</script>`;
+  const registry = JSON.stringify(requestRegistry.getStore() ?? {}).replace(/</g, "\\u003c");
+  return `<script id="${MF_RELEASES_ELEMENT_ID}" type="application/json">${json}</script><script id="${MF_REGISTRY_ELEMENT_ID}" type="application/json">${registry}</script>`;
 }
 
 declare const __MF_REMOTES__: Record<string, string> | undefined;
@@ -70,38 +79,32 @@ declare const __MF_NETWORK__: NetworkOptions | undefined;
 if (typeof __MF_NETWORK__ !== "undefined") configureNetwork(__MF_NETWORK__);
 if (typeof __MF_LOADING__ !== "undefined") configureLoading(__MF_LOADING__);
 
-function ensureInit() {
-  if (remotes.size > 0) return;
-
-  for (const [name, url] of Object.entries(__MF_REMOTES__ || {})) {
-    remotes.set(name, new Remote(url, getLoader(), "server"));
-  }
+function initializeRegistry(): void {
+  if (registryInitialized) return;
+  registerStaticRemotes(typeof __MF_REMOTES__ === "undefined" ? {} : __MF_REMOTES__ ?? {});
+  registryInitialized = true;
 }
 
 export function getRemote(name: string): Remote {
+  initializeRegistry();
+  const selection = findRegistrySelection(name, typeof __MF_REMOTES__ === "undefined" ? undefined : __MF_REMOTES__?.[name], requestRegistry.getStore() ?? getRegistryOverrides());
+  if (!selection || selection.enabled === false) throw new RemoteLoadError({ remote: name, stage: "module" }, "LOAD_FAILED", selection ? "Remote is disabled" : "Remote not found in registry");
   const requestRemotes = requestContext.getStore();
   if (requestRemotes) {
-    const url = (__MF_REMOTES__ || {})[name];
-    if (!url) {
-      throw new RemoteLoadError({ remote: name, stage: "module" }, "LOAD_FAILED", `Remote not found. Available: ${Object.keys(__MF_REMOTES__ || {}).join(", ") || "none"}`);
-    }
-
-    const key = url.replace(/\/$/, "");
+    const key = selection.url;
     let remote = requestRemotes.get(key);
     if (!remote) {
-      remote = new Remote(url, getLoader(), "server", undefined, requestSignal.getStore());
+      remote = new Remote(selection.url, getLoader(), "server", () => selection.release, requestSignal.getStore());
       requestRemotes.set(key, remote);
     }
     return remote;
   }
 
-  ensureInit();
-
-  const remote = remotes.get(name);
-  if (!remote) {
-    throw new RemoteLoadError({ remote: name, stage: "module" }, "LOAD_FAILED", `Remote not found. Available: ${[...remotes.keys()].join(", ") || "none"}`);
-  }
-
+  const identity = JSON.stringify(selection);
+  const cached = remotes.get(name);
+  if (cached?.identity === identity) return cached.remote;
+  const remote = new Remote(selection.url, getLoader(), "server", () => selection.release);
+  remotes.set(name, { identity, remote });
   return remote;
 }
 

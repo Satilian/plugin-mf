@@ -1,5 +1,8 @@
 export { Loader, configureServerCache, runWithMFRequest, getMFReleases, serializeMFReleases, getRemote, createRemoteComponent, preloadRemotes } from "./runtime/server/runtime.ts";
 export type { PreloadTarget, PreloadOptions } from "./protocol/preload.ts";
+export { configureRegistry, refreshRegistry, getRegistrySnapshot } from "./transport/registry.ts";
+export type { RegistryOptions } from "./transport/registry.ts";
+export type { RegistryConfig, RegistryEntry, RegistrySelection, RegistrySnapshot } from "./protocol/registry.ts";
 export type { ServerCacheOptions, CachePruneResult } from "./runtime/server/runtime.ts";
 export { configureLoading } from "./transport/loading.ts";
 export { configureObservability, getLoadingMetrics } from "./transport/observability.ts";
